@@ -33,6 +33,7 @@ class KhoPage(ctk.CTkFrame):
         ctk.CTkLabel(container, text="Quản lý Kho Nguyên Liệu", font=("Arial", 18, "bold"), text_color="#333").pack(
             anchor="w", pady=(0, 20))
 
+
         # === CONTROL PANEL ===
         action_bar = ctk.CTkFrame(container, fg_color="white")
         action_bar.pack(fill="x", pady=(0, 20))
