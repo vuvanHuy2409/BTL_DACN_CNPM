@@ -1,129 +1,239 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
+from src.Controller.KhoController import KhoController
+
 
 class KhoPage(ctk.CTkFrame):
     def __init__(self, parent):
-        # 1. Kế thừa Frame để nhúng vào Main
         super().__init__(parent, fg_color="white")
 
-        # 2. Tạo giao diện
+        self.controller = KhoController()
+        self.selected_id = None
+        self.current_list = []
+
+        # Map tên NCC -> ID
+        self.ncc_map = {}
+        self.ncc_names = []
+
+        # Load danh sách NCC
+        self.load_ncc_combobox_data()
+
         self.tao_main_content()
+        self.load_table_data()
+
+    def load_ncc_combobox_data(self):
+        data = self.controller.get_ncc_list()
+        self.ncc_map = {item['tenNhaCungCap']: item['idNhaCungCap'] for item in data}
+        self.ncc_names = list(self.ncc_map.keys())
 
     def tao_main_content(self):
-        """Tạo nội dung chính"""
-        # Container chính
         container = ctk.CTkFrame(self, fg_color="white")
-        container.pack(fill="both", expand=True, padx=15, pady=15)
+        container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # Tiêu đề
-        title = ctk.CTkLabel(container, text="Quản lý Kho", font=("Arial", 16, "bold"), text_color="#333")
-        title.pack(anchor="w", pady=(0, 15))
+        ctk.CTkLabel(container, text="Quản lý Kho Nguyên Liệu", font=("Arial", 18, "bold"), text_color="#333").pack(
+            anchor="w", pady=(0, 20))
 
-        # --- Form section (Nền xám nhạt) ---
-        form_section = ctk.CTkFrame(container, fg_color="#f5f5f5", border_width=1, border_color="#ccc")
-        form_section.pack(anchor="w", fill="x", pady=(0, 20))
+        # === CONTROL PANEL ===
+        action_bar = ctk.CTkFrame(container, fg_color="white")
+        action_bar.pack(fill="x", pady=(0, 20))
 
-        form_inner = ctk.CTkFrame(form_section, fg_color="#f5f5f5")
-        form_inner.pack(fill="both", expand=True, padx=15, pady=15)
+        btn_frame = ctk.CTkFrame(action_bar, fg_color="white")
+        btn_frame.pack(side="left")
+        self.create_btn(btn_frame, "Thêm", "#4CAF50", "#45a049", self.them)
+        self.create_btn(btn_frame, "Sửa", "#2196F3", "#0b7dda", self.sua)
+        self.create_btn(btn_frame, "Ẩn/Hiện", "#FF9800", "#F57C00", self.an_hien)
+        self.create_btn(btn_frame, "Làm mới", "#9E9E9E", "#757575", self.lam_moi)
 
-        # === Row 1: Buttons + Search ===
-        row1 = ctk.CTkFrame(form_inner, fg_color="#f5f5f5")
-        row1.pack(anchor="w", fill="x", pady=(0, 20))
+        search_frame = ctk.CTkFrame(action_bar, fg_color="white")
+        search_frame.pack(side="right")
+        self.search_entry = ctk.CTkEntry(search_frame, width=250, placeholder_text="Tên nguyên liệu...")
+        self.search_entry.pack(side="left", padx=5)
+        ctk.CTkButton(search_frame, text="Tìm", width=60, command=self.tim_kiem).pack(side="left")
 
-        # Action Buttons (Đã áp dụng màu)
-        action_frame = ctk.CTkFrame(row1, fg_color="#f5f5f5")
-        action_frame.pack(side="left", anchor="w")
+        # === FORM ===
+        form_frame = ctk.CTkFrame(container, fg_color="#f5f5f5")
+        form_frame.pack(fill="x", pady=(0, 20))
+        form_inner = ctk.CTkFrame(form_frame, fg_color="#f5f5f5")
+        form_inner.pack(padx=20, pady=20, fill="x")
 
-        # Nút THÊM (Xanh lá)
-        ctk.CTkButton(action_frame, text="Thêm", fg_color="#4CAF50", text_color="white",
-                      hover_color="#45a049", width=80, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6).pack(side="left", padx=(0, 10))
+        # Hàng 1
+        r1 = ctk.CTkFrame(form_inner, fg_color="#f5f5f5")
+        r1.pack(fill="x", pady=5)
+        self.entry_ten = self.create_input(r1, "Tên nguyên liệu", 250)
+        self.entry_gia = self.create_input(r1, "Giá nhập (VNĐ)", 150)
 
-        # Nút SỬA (Xanh dương)
-        ctk.CTkButton(action_frame, text="Sửa", fg_color="#2196F3", text_color="white",
-                      hover_color="#0b7dda", width=80, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6).pack(side="left", padx=(0, 10))
+        # Hàng 2
+        r2 = ctk.CTkFrame(form_inner, fg_color="#f5f5f5")
+        r2.pack(fill="x", pady=5)
+        self.entry_sl = self.create_input(r2, "Số lượng tồn", 150)
+        self.entry_dvt = self.create_input(r2, "Đơn vị tính", 100)
 
-        # Nút XÓA (Đỏ)
-        ctk.CTkButton(action_frame, text="Xóa", fg_color="#f44336", text_color="white",
-                      hover_color="#da190b", width=80, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6).pack(side="left", padx=(0, 10))
+        # Combobox Nhà Cung Cấp
+        f_cb = ctk.CTkFrame(r2, fg_color="#f5f5f5")
+        f_cb.pack(side="left", padx=20, fill="x", expand=True)
+        ctk.CTkLabel(f_cb, text="Nhà cung cấp", font=("Arial", 11, "bold")).pack(anchor="w")
+        self.cb_ncc = ctk.CTkComboBox(f_cb, values=self.ncc_names, width=250, state="readonly")
+        self.cb_ncc.set("Chọn NCC")
+        self.cb_ncc.pack(fill="x")
 
-        # Nút LÀM MỚI (Xám)
-        ctk.CTkButton(action_frame, text="Làm mới", fg_color="#9E9E9E", text_color="white",
-                      hover_color="#757575", width=90, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6).pack(side="left", padx=(0, 10))
+        # === TABLE ===
+        table_frame = ctk.CTkFrame(container, fg_color="white")
+        table_frame.pack(fill="both", expand=True)
 
-        # Nút XUẤT (Cyan)
-        ctk.CTkButton(action_frame, text="Xuất Excel", fg_color="#00BCD4", text_color="white",
-                      hover_color="#0097A7", width=100, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6).pack(side="left")
+        columns = ("stt", "ten", "gia", "sl", "dvt", "ncc", "trangthai")
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
 
-        # Search Box
-        search_frame = ctk.CTkFrame(row1, fg_color="#f5f5f5")
-        search_frame.pack(side="right", fill="x", expand=True, padx=(40, 0))
+        self.tree.heading("stt", text="STT")
+        self.tree.heading("ten", text="Tên Nguyên Liệu")
+        self.tree.heading("gia", text="Giá Nhập")
+        self.tree.heading("sl", text="Tồn Kho")
+        self.tree.heading("dvt", text="ĐVT")
+        self.tree.heading("ncc", text="Nhà Cung Cấp")
+        self.tree.heading("trangthai", text="Trạng Thái")
 
-        ctk.CTkLabel(search_frame, text="Tìm kiếm:", font=("Arial", 11), text_color="#333").pack(side="left", padx=(0, 10))
-        
-        self.search_entry = ctk.CTkEntry(search_frame, height=32, border_width=1, border_color="#ccc")
-        self.search_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        
-        ctk.CTkButton(search_frame, text="Tìm", fg_color="#2196F3", text_color="white",
-                      hover_color="#0b7dda", width=60, height=32, font=("Arial", 11, "bold"),
-                      corner_radius=6).pack(side="left")
+        self.tree.column("stt", width=50, anchor="center")
+        self.tree.column("ten", width=200)
+        self.tree.column("gia", width=100, anchor="e")
+        self.tree.column("sl", width=80, anchor="center")
+        self.tree.column("dvt", width=80, anchor="center")
+        self.tree.column("ncc", width=200)
+        self.tree.column("trangthai", width=100, anchor="center")
 
-        # === Row 2: Form fields ===
-        row2 = ctk.CTkFrame(form_inner, fg_color="#f5f5f5")
-        row2.pack(anchor="w", fill="x", pady=(0, 15))
+        scrollbar = ttk.Scrollbar(table_frame, command=self.tree.yview)
+        self.tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(fill="both", expand=True)
 
-        self.create_input(row2, "Mã nguyên liệu", 120)
-        self.create_input(row2, "Tên nguyên liệu", None, fill="x")  # None width để fill
-        self.create_input(row2, "Giá nhập", 120)
-        self.create_input(row2, "Nhà cung cấp", 200)
+        self.tree.bind("<<TreeviewSelect>>", self.on_select_row)
 
-        # === Row 3: Form fields ===
-        row3 = ctk.CTkFrame(form_inner, fg_color="#f5f5f5")
-        row3.pack(anchor="w", fill="x", pady=(0, 20))
-        self.create_input(row3, "Số lượng", 100)
-        # Có thể thêm Ghi chú ở đây nếu cần cho cân đối
+    def create_input(self, parent, label, width):
+        f = ctk.CTkFrame(parent, fg_color="#f5f5f5")
+        f.pack(side="left", padx=(0, 20), fill="x", expand=True)
+        ctk.CTkLabel(f, text=label, font=("Arial", 11, "bold")).pack(anchor="w")
+        e = ctk.CTkEntry(f, width=width)
+        e.pack(fill="x")
+        return e
 
-        # --- List section ---
-        ctk.CTkLabel(container, text="Danh sách nguyên liệu", font=("Arial", 12, "bold"), text_color="#333").pack(
-            anchor="center", pady=(10, 10))
+    def create_btn(self, parent, text, color, hover, cmd):
+        ctk.CTkButton(parent, text=text, fg_color=color, hover_color=hover, width=80, command=cmd).pack(side="left",
+                                                                                                        padx=5)
 
-        list_frame = ctk.CTkFrame(container, fg_color="white", border_width=2, border_color="#ccc")
-        list_frame.pack(fill="both", expand=True)
+    # === LOGIC ===
+    def load_table_data(self, data=None):
+        for item in self.tree.get_children(): self.tree.delete(item)
 
-        # Header
-        table_header = ctk.CTkFrame(list_frame, fg_color="#f0f0f0", height=40, corner_radius=0)
-        table_header.pack(fill="x")
-        table_header.pack_propagate(False)
-
-        headers = [("STT", 0.08), ("Mã NL", 0.15), ("Tên nguyên liệu", 0.30),
-                   ("Giá nhập", 0.17), ("Nhà cung cấp", 0.20), ("Số lượng", 0.10)]
-
-        x_offset = 0
-        for header_text, relwidth in headers:
-            label = ctk.CTkLabel(table_header, text=header_text, font=("Arial", 11, "bold"),
-                                 text_color="#333", anchor="center" if header_text in ["STT", "Số lượng"] else "w")
-            label.place(relx=x_offset, rely=0.5, anchor="w", relwidth=relwidth)
-            x_offset += relwidth
-
-        # Content
-        self.table_content = ctk.CTkScrollableFrame(list_frame, fg_color="white", corner_radius=0)
-        self.table_content.pack(fill="both", expand=True, padx=2, pady=2)
-
-        ctk.CTkLabel(self.table_content, text="Chưa có dữ liệu nguyên liệu\nVui lòng thêm nguyên liệu mới",
-                     font=("Arial", 11), text_color="#999").pack(pady=30)
-
-    def create_input(self, parent, label_text, width, fill=None):
-        """Helper để tạo label và entry nhanh"""
-        # Set fg_color là #f5f5f5 để trùng màu nền form
-        frame = ctk.CTkFrame(parent, fg_color="#f5f5f5")
-        frame.pack(side="left", padx=(0, 15), fill=fill if fill else "none", expand=True if fill else False)
-
-        ctk.CTkLabel(frame, text=label_text, font=("Arial", 10), text_color="#333").pack(anchor="w", pady=(0, 5))
-        if width:
-            ctk.CTkEntry(frame, height=28, width=width).pack(anchor="w")
+        if data is None:
+            self.current_list = self.controller.get_list()
         else:
-            ctk.CTkEntry(frame, height=28).pack(fill="x")
+            self.current_list = data
+
+        for idx, row in enumerate(self.current_list):
+            status = "Hiện" if row['isActive'] else "Ẩn"
+
+            # Format giá tiền (dấu phẩy)
+            gia_fmt = "{:,.0f}".format(row['giaNhap'])
+
+            # [SỬA ĐỔI] Format số lượng thành số nguyên
+            sl_fmt = int(row['soLuongTon'])
+
+            self.tree.insert("", "end", values=(
+                idx + 1,
+                row['tenNguyenLieu'],
+                gia_fmt,
+                sl_fmt,  # Hiển thị số nguyên
+                row['donViTinh'],
+                row['tenNhaCungCap'] if row['tenNhaCungCap'] else "N/A",
+                status
+            ))
+
+    def on_select_row(self, event):
+        sel = self.tree.selection()
+        if sel:
+            idx = self.tree.index(sel[0])
+            if idx < len(self.current_list):
+                data = self.current_list[idx]
+                self.selected_id = data['idNguyenLieu']
+
+                self.entry_ten.delete(0, "end");
+                self.entry_ten.insert(0, data['tenNguyenLieu'])
+                self.entry_gia.delete(0, "end");
+                self.entry_gia.insert(0, int(data['giaNhap']))
+
+                # [SỬA ĐỔI] Hiển thị số nguyên trong ô nhập liệu luôn
+                self.entry_sl.delete(0, "end");
+                self.entry_sl.insert(0, int(data['soLuongTon']))
+
+                self.entry_dvt.delete(0, "end");
+                self.entry_dvt.insert(0, data['donViTinh'])
+
+                if data['tenNhaCungCap'] in self.ncc_names:
+                    self.cb_ncc.set(data['tenNhaCungCap'])
+                else:
+                    self.cb_ncc.set("Chọn NCC")
+
+    def them(self):
+        ten = self.entry_ten.get()
+        gia = self.entry_gia.get()
+        sl = self.entry_sl.get()
+        dvt = self.entry_dvt.get()
+
+        ten_ncc = self.cb_ncc.get()
+        id_ncc = self.ncc_map.get(ten_ncc)
+
+        if not id_ncc:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng chọn Nhà cung cấp!")
+            return
+
+        success, msg = self.controller.add_nguyen_lieu(ten, gia, sl, dvt, id_ncc)
+        if success:
+            messagebox.showinfo("Thành công", msg)
+            self.lam_moi()
+            self.load_table_data()
+        else:
+            messagebox.showerror("Lỗi", msg)
+
+    def sua(self):
+        if not self.selected_id:
+            messagebox.showwarning("Cảnh báo", "Chọn nguyên liệu cần sửa!")
+            return
+
+        ten = self.entry_ten.get()
+        gia = self.entry_gia.get()
+        sl = self.entry_sl.get()
+        dvt = self.entry_dvt.get()
+        id_ncc = self.ncc_map.get(self.cb_ncc.get())
+
+        success, msg = self.controller.update_nguyen_lieu(self.selected_id, ten, gia, sl, dvt, id_ncc)
+        if success:
+            messagebox.showinfo("Thành công", msg)
+            self.lam_moi()
+            self.load_table_data()
+        else:
+            messagebox.showerror("Lỗi", msg)
+
+    def an_hien(self):
+        if not self.selected_id:
+            messagebox.showwarning("Cảnh báo", "Chọn nguyên liệu để đổi trạng thái!")
+            return
+
+        success, msg = self.controller.doi_trang_thai(self.selected_id)
+        if success:
+            messagebox.showinfo("Thành công", msg)
+            self.lam_moi()
+            self.load_table_data()
+        else:
+            messagebox.showerror("Lỗi", msg)
+
+    def lam_moi(self):
+        self.selected_id = None
+        self.entry_ten.delete(0, "end")
+        self.entry_gia.delete(0, "end")
+        self.entry_sl.delete(0, "end")
+        self.entry_dvt.delete(0, "end")
+        self.cb_ncc.set("Chọn NCC")
+        if self.tree.selection(): self.tree.selection_remove(self.tree.selection())
+
+    def tim_kiem(self):
+        kw = self.search_entry.get()
+        res = self.controller.search_nguyen_lieu(kw)
+        self.load_table_data(res)

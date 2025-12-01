@@ -5,4 +5,5 @@ do
     git pull origin main
     sleep 60
 done
--- git push -u origin main
+
+ git push -u origin main
