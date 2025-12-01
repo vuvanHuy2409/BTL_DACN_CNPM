@@ -19,6 +19,7 @@ CREATE TABLE taiKhoanNhanVien (
     idTaiKhoan INT PRIMARY KEY AUTO_INCREMENT,
     tenDangNhap VARCHAR(50) NOT NULL UNIQUE,
     matKhauHash VARCHAR(255) NOT NULL,
+    hinhAnhUrl TEXT,
     vectorKhuonMat BLOB
 );
 
@@ -204,12 +205,12 @@ INSERT INTO chucVu (tenChucVu, luongCoBan) VALUES
 ('Phục Vụ', 5500000.00),           -- ID 3
 ('Bảo Vệ', 5000000.00);            -- ID 4
 
--- 1.2 Tài khoản (Mật khẩu demo là hash MD5 của '123456')
-INSERT INTO taiKhoanNhanVien (tenDangNhap, matKhauHash) VALUES
-('admin', 'e10adc3949ba59abbe56e057f20f883e'),      -- ID 1
-('barista_truong', 'e10adc3949ba59abbe56e057f20f883e'), -- ID 2
-('pv_sang', 'e10adc3949ba59abbe56e057f20f883e'),    -- ID 3
-('pv_toi', 'e10adc3949ba59abbe56e057f20f883e');     -- ID 4
+--
+INSERT INTO taiKhoanNhanVien (tenDangNhap, matKhauHash, hinhAnhUrl) VALUES
+('admin', 'e10adc3949ba59abbe56e057f20f883e', NULL),          -- ID 1
+('barista_truong', 'e10adc3949ba59abbe56e057f20f883e', NULL), -- ID 2
+('pv_sang', 'e10adc3949ba59abbe56e057f20f883e', NULL),        -- ID 3
+('pv_toi', 'e10adc3949ba59abbe56e057f20f883e', NULL);         -- ID 4
 
 -- 1.3 Nhân viên
 INSERT INTO nhanVien (hoTen, soDienThoai, email, ngayBatDau, phanQuyen, idChucVu, idTaiKhoan) VALUES
