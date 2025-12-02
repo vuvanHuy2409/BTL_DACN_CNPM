@@ -20,12 +20,11 @@ class TaiKhoanModel:
 
     def get_all(self):
         self.connect()
-        # Lấy danh sách nhân viên + thông tin tài khoản (nếu có)
+        # [UPDATE] Đã bỏ hinhAnhUrl và vectorKhuonMat khỏi SELECT
         query = """
             SELECT 
                 nv.idNhanVien, nv.hoTen, nv.email, cv.tenChucVu,
-                tk.idTaiKhoan, tk.tenDangNhap, tk.matKhauHash, 
-                tk.vectorKhuonMat, tk.hinhAnhUrl
+                tk.idTaiKhoan, tk.tenDangNhap, tk.matKhauHash
             FROM nhanVien nv
             LEFT JOIN taiKhoanNhanVien tk ON nv.idTaiKhoan = tk.idTaiKhoan
             JOIN chucVu cv ON nv.idChucVu = cv.idChucVu
@@ -46,8 +45,8 @@ class TaiKhoanModel:
         try:
             if self.cursor:
                 self.cursor.execute(query, (role_name,))
-                res = self.cursor.fetchone()
-                return res['idChucVu'] if res else None
+                result = self.cursor.fetchone()
+                return result['idChucVu'] if result else None
             return None
         finally:
             self.close()
@@ -63,22 +62,18 @@ class TaiKhoanModel:
         finally:
             self.close()
 
-    # --- CÁC HÀM XỬ LÝ DỮ LIỆU ---
+    # --- CÁC HÀM XỬ LÝ DỮ LIỆU (ĐÃ XÓA ẢNH) ---
 
     def create_account_for_existing(self, idNV, data):
-        """Cấp tài khoản cho nhân viên ĐÃ CÓ (nhưng chưa có TK)"""
         self.connect()
         try:
             self.conn.start_transaction()
-            # 1. Tạo TK mới
-            sql_tk = """
-                INSERT INTO taiKhoanNhanVien (tenDangNhap, matKhauHash, vectorKhuonMat, hinhAnhUrl) 
-                VALUES (%s, %s, %s, %s)
-            """
-            self.cursor.execute(sql_tk, (data['user'], data['pass'], data['avatar_blob'], data['image_path']))
+            # 1. Tạo TK mới (Không còn ảnh)
+            sql_tk = "INSERT INTO taiKhoanNhanVien (tenDangNhap, matKhauHash) VALUES (%s, %s)"
+            self.cursor.execute(sql_tk, (data['user'], data['pass']))
             id_tk = self.cursor.lastrowid
 
-            # 2. Update NV để link tới TK vừa tạo
+            # 2. Update NV
             sql_update = "UPDATE nhanVien SET idTaiKhoan = %s WHERE idNhanVien = %s"
             self.cursor.execute(sql_update, (id_tk, idNV))
 
@@ -92,7 +87,6 @@ class TaiKhoanModel:
             self.close()
 
     def update_info(self, idNV, data):
-        """Cập nhật thông tin khi ĐÃ CÓ tài khoản"""
         self.connect()
         try:
             self.conn.start_transaction()
@@ -103,20 +97,9 @@ class TaiKhoanModel:
             if not res or not res['idTaiKhoan']: return False
             id_tk = res['idTaiKhoan']
 
-            # Update TK
-            # Nếu có ảnh mới (blob khác None) thì update cả ảnh, ngược lại giữ nguyên
-            if data['avatar_blob'] is not None:
-                sql_tk = """
-                    UPDATE taiKhoanNhanVien 
-                    SET tenDangNhap=%s, matKhauHash=%s, vectorKhuonMat=%s, hinhAnhUrl=%s 
-                    WHERE idTaiKhoan=%s
-                """
-                val_tk = (data['user'], data['pass'], data['avatar_blob'], data['image_path'], id_tk)
-            else:
-                # Không đổi ảnh -> Giữ nguyên Url và Blob cũ
-                sql_tk = "UPDATE taiKhoanNhanVien SET tenDangNhap=%s, matKhauHash=%s WHERE idTaiKhoan=%s"
-                val_tk = (data['user'], data['pass'], id_tk)
-
+            # Update TK (Chỉ update User/Pass)
+            sql_tk = "UPDATE taiKhoanNhanVien SET tenDangNhap=%s, matKhauHash=%s WHERE idTaiKhoan=%s"
+            val_tk = (data['user'], data['pass'], id_tk)
             self.cursor.execute(sql_tk, val_tk)
 
             # Update NV
@@ -133,7 +116,6 @@ class TaiKhoanModel:
             self.close()
 
     def remove_account(self, idNV):
-        """Xóa tài khoản (Unlink NV -> Delete TK)"""
         self.connect()
         try:
             self.conn.start_transaction()
