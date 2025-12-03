@@ -14,7 +14,7 @@
 
     ```Bash
     git add .
-    git commit -m "Mô tả ngắn gọn việc đã làm"
+    git commit -m "4/12/2025"
 * Bước 3: Đẩy lên (Push)
     ```Bash
     git push origin main

@@ -12,7 +12,7 @@ from quenMK import ForgotPasswordPage
 
 
 # --- 3. IMPORT CÁC TRANG CHỨC NĂNG (MODULES) ---
-from menu import MenuPage
+from trangChu import MenuPage
 from khachHang import KhachHangPage
 from qlKho import KhoPage
 from qlSanPham import SanPhamPage

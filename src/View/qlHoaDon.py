@@ -1,168 +1,192 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, ttk, filedialog  # Import filedialog
+from src.Controller.HoaDonController import HoaDonController
+
 
 class HoaDonPage(ctk.CTkFrame):
     def __init__(self, parent):
         super().__init__(parent, fg_color="white")
 
-        # Dữ liệu giả lập
-        self.dummy_data = [
-            {"id": "HD001", "kh": "Nguyễn Văn A", "ngay": "28/11/2025", "tien": 1500000, "status": "Đã thanh toán"},
-            {"id": "HD002", "kh": "Trần Thị B", "ngay": "28/11/2025", "tien": 200000, "status": "Chờ thanh toán"},
-            {"id": "HD003", "kh": "Lê Văn C", "ngay": "27/11/2025", "tien": 5500000, "status": "Đã thanh toán"},
-            {"id": "HD004", "kh": "Phạm Thị D", "ngay": "26/11/2025", "tien": 890000, "status": "Hủy"},
-        ]
-        
+        self.controller = HoaDonController()
+        self.current_list = []
         self.selected_id = None
+        self.selected_status_text = None
+
         self.tao_main_content()
+        self.load_table_data()
 
     def tao_main_content(self):
         container = ctk.CTkFrame(self, fg_color="white")
         container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # === TITLE ===
-        ctk.CTkLabel(container, text="Quản lý Hóa Đơn", font=("Arial", 20, "bold"), text_color="#333").pack(anchor="w", pady=(0, 20))
+        # Title
+        ctk.CTkLabel(container, text="QUẢN LÝ HÓA ĐƠN", font=("Arial", 20, "bold"), text_color="#333").pack(anchor="w",
+                                                                                                            pady=(
+                                                                                                            0, 20))
 
-        # === CONTROL BAR (Buttons + Search) ===
+        # Control Bar
         control_frame = ctk.CTkFrame(container, fg_color="white")
         control_frame.pack(fill="x", pady=(0, 15))
 
-        # Left: Buttons
+        # Buttons
         btn_frame = ctk.CTkFrame(control_frame, fg_color="white")
         btn_frame.pack(side="left")
 
-        # Helper tạo nút nhanh
-        def create_btn(text, color, hover, cmd):
-            return ctk.CTkButton(btn_frame, text=text, fg_color=color, hover_color=hover,
-                                 text_color="white", font=("Arial", 11, "bold"),
-                                 width=90, height=35, corner_radius=6, command=cmd)
+        self.create_btn(btn_frame, "Xem Chi Tiết", "#2196F3", self.xem_chi_tiet)
+        self.create_btn(btn_frame, "Sửa Trạng Thái", "#FF9800", self.sua_hoa_don)  # Nút Sửa
+        self.create_btn(btn_frame, "Xuất Excel", "#009688", self.xuat_excel_hoadon)  # Nút Xuất
+        self.create_btn(btn_frame, "Tải lại", "#9E9E9E", self.load_table_data)
 
-        create_btn("Tạo mới", "#4CAF50", "#45a049", self.them_moi).pack(side="left", padx=(0, 10))
-        create_btn("Sửa", "#2196F3", "#0b7dda", self.sua).pack(side="left", padx=(0, 10))
-        create_btn("Xóa", "#f44336", "#da190b", self.xoa).pack(side="left", padx=(0, 10))
-        create_btn("In HĐ", "#00BCD4", "#0097A7", self.in_hoadon).pack(side="left", padx=(0, 10))
+        # Search (Giữ nguyên)
+        # ...
 
-        # Right: Search
-        search_frame = ctk.CTkFrame(control_frame, fg_color="white")
-        search_frame.pack(side="right")
-        
-        self.search_entry = ctk.CTkEntry(search_frame, width=250, height=35, placeholder_text="Tìm theo mã hoặc tên KH...", border_width=1, border_color="#ccc")
-        self.search_entry.pack(side="left", padx=(0, 10))
-        
-        ctk.CTkButton(search_frame, text="Tìm", fg_color="#607D8B", hover_color="#546E7A", width=60, height=35, command=self.tim_kiem).pack(side="left")
+        # Table
+        table_frame = ctk.CTkFrame(container, fg_color="white")
+        table_frame.pack(fill="both", expand=True)
 
-        # === TABLE AREA ===
-        # Header Frame
-        table_container = ctk.CTkFrame(container, fg_color="white", border_width=1, border_color="#ccc")
-        table_container.pack(fill="both", expand=True)
+        # [CẬP NHẬT] Thêm cột Ngày Sửa
+        cols = ("id", "kh", "nv", "ngay", "ngaysua", "tien", "tt")
+        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", height=15)
 
-        header_frame = ctk.CTkFrame(table_container, fg_color="#f0f0f0", height=40, corner_radius=0)
-        header_frame.pack(fill="x")
-        
-        # Cấu hình cột: (Tên, Width ratio)
-        columns = [("Mã HĐ", 0.1), ("Khách Hàng", 0.3), ("Ngày Tạo", 0.2), ("Tổng Tiền", 0.2), ("Trạng Thái", 0.2)]
-        
-        for i, (col_name, ratio) in enumerate(columns):
-            lbl = ctk.CTkLabel(header_frame, text=col_name, font=("Arial", 11, "bold"), text_color="#333", anchor="w" if i != 4 else "center")
-            lbl.place(relx=sum(c[1] for c in columns[:i]), rely=0.5, anchor="w", relwidth=ratio)
+        self.tree.heading("id", text="Mã HĐ")
+        self.tree.heading("kh", text="Khách Hàng")
+        self.tree.heading("nv", text="NV Lập")
+        self.tree.heading("ngay", text="Ngày Tạo")
+        self.tree.heading("ngaysua", text="Ngày Sửa")  # Cột mới
+        self.tree.heading("tien", text="Tổng Tiền")
+        self.tree.heading("tt", text="Trạng Thái")
 
-        # Content List (Scrollable)
-        self.scroll_frame = ctk.CTkScrollableFrame(table_container, fg_color="white", corner_radius=0)
-        self.scroll_frame.pack(fill="both", expand=True)
+        self.tree.column("id", width=60, anchor="center")
+        self.tree.column("kh", width=150)
+        self.tree.column("nv", width=150)
+        self.tree.column("ngay", width=120, anchor="center")
+        self.tree.column("ngaysua", width=120, anchor="center")
+        self.tree.column("tien", width=120, anchor="e")
+        self.tree.column("tt", width=100, anchor="center")
 
-        # Load dữ liệu
-        self.load_table_data(self.dummy_data)
+        self.tree.tag_configure('success', foreground='green')
+        self.tree.tag_configure('cancel', foreground='red')
+        self.tree.tag_configure('wait', foreground='orange')
 
-    def load_table_data(self, data):
-        # Xóa dữ liệu cũ
-        for widget in self.scroll_frame.winfo_children():
-            widget.destroy()
+        self.tree.pack(fill="both", expand=True)
+        self.tree.bind("<<TreeviewSelect>>", self.on_select)
 
-        if not data:
-            ctk.CTkLabel(self.scroll_frame, text="Không tìm thấy dữ liệu", text_color="#999").pack(pady=20)
+    def create_btn(self, parent, text, color, cmd):
+        ctk.CTkButton(parent, text=text, fg_color=color, width=120, height=32, command=cmd).pack(side="left", padx=5)
+
+    # === LOGIC ===
+    def load_table_data(self):
+        for i in self.tree.get_children(): self.tree.delete(i)
+        self.current_list = self.controller.get_list_invoices()
+
+        for item in self.current_list:
+            tag = 'wait'
+            if item['trangThai'] == 2:
+                tag = 'success'
+            elif item['trangThai'] == 0:
+                tag = 'cancel'
+
+            self.tree.insert("", "end", values=(
+                item['idHoaDon'],
+                item['tenKhachHang'],
+                item['tenNhanVien'],
+                item['ngayTaoFmt'],
+                item['ngaySuaFmt'],  # Hiển thị ngày sửa
+                item['tongTienFmt'],
+                item['statusText']
+            ), tags=(tag,))
+
+    def on_select(self, event):
+        sel = self.tree.selection()
+        if sel:
+            val = self.tree.item(sel[0], 'values')
+            self.selected_id = val[0]
+            self.selected_status_text = val[6]  # Lấy trạng thái hiện tại
+
+    # [MỚI] Hàm Sửa Hóa Đơn
+    def sua_hoa_don(self):
+        if not self.selected_id:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn cần sửa!")
             return
 
-        # Render từng dòng
-        for item in data:
-            self.render_row(item)
+        # Tạo Popup
+        w = ctk.CTkToplevel(self)
+        w.title(f"Sửa Hóa Đơn #{self.selected_id}")
+        w.geometry("300x200")
+        w.attributes("-topmost", True)
 
-    def render_row(self, item):
-        row = ctk.CTkFrame(self.scroll_frame, fg_color="white", height=40, corner_radius=0)
-        row.pack(fill="x", pady=1)
+        ctk.CTkLabel(w, text="Cập nhật trạng thái:", font=("Arial", 14, "bold")).pack(pady=20)
 
-        # Hiệu ứng hover
-        def on_enter(e): row.configure(fg_color="#e3f2fd")
-        def on_leave(e): 
-            if self.selected_id != item['id']:
-                row.configure(fg_color="white")
+        # Combobox chọn trạng thái
+        statuses = ["Chờ thanh toán", "Đã thanh toán", "Đã hủy"]
+        cb_status = ctk.CTkComboBox(w, values=statuses, state="readonly", width=200)
+        cb_status.set(self.selected_status_text)  # Set giá trị hiện tại
+        cb_status.pack(pady=10)
+
+        def save_change():
+            new_status = cb_status.get()
+            if new_status == self.selected_status_text:
+                w.destroy();
+                return  # Không đổi gì cả
+
+            ok, msg = self.controller.edit_invoice(self.selected_id, new_status)
+            if ok:
+                messagebox.showinfo("Thành công", msg)
+                self.load_table_data()  # Reload để thấy ngày sửa mới
+                w.destroy()
             else:
-                row.configure(fg_color="#bbdefb") # Màu khi đang chọn
+                messagebox.showerror("Lỗi", msg)
 
-        def on_click(e):
-            self.selected_id = item['id']
-            # Reset màu các row khác (đơn giản hóa: load lại bảng hoặc lưu ref)
-            self.load_table_data(self.dummy_data) # Load lại để refresh highlight (cách đơn giản nhất)
-            
-        row.bind("<Enter>", on_enter)
-        row.bind("<Leave>", on_leave)
-        row.bind("<Button-1>", on_click)
+        ctk.CTkButton(w, text="Lưu Thay Đổi", fg_color="#4CAF50", command=save_change).pack(pady=10)
 
-        # Màu nền trạng thái
-        status_color = "#4CAF50" if item['status'] == "Đã thanh toán" else ("#FF9800" if item['status'] == "Chờ thanh toán" else "#F44336")
-        
-        # Hiển thị dữ liệu
-        # 1. Mã
-        ctk.CTkLabel(row, text=item['id'], font=("Arial", 11), text_color="#333", anchor="w").place(relx=0, rely=0.5, anchor="w", relwidth=0.1)
-        # 2. Tên
-        ctk.CTkLabel(row, text=item['kh'], font=("Arial", 11, "bold"), text_color="#333", anchor="w").place(relx=0.1, rely=0.5, anchor="w", relwidth=0.3)
-        # 3. Ngày
-        ctk.CTkLabel(row, text=item['ngay'], font=("Arial", 11), text_color="#555", anchor="w").place(relx=0.4, rely=0.5, anchor="w", relwidth=0.2)
-        # 4. Tiền (Format VND)
-        money_str = f"{item['tien']:,.0f} đ"
-        ctk.CTkLabel(row, text=money_str, font=("Arial", 11, "bold"), text_color="#2196F3", anchor="w").place(relx=0.6, rely=0.5, anchor="w", relwidth=0.2)
-        
-        # 5. Trạng thái (Badge)
-        status_frame = ctk.CTkFrame(row, fg_color=status_color, height=22, width=100, corner_radius=10)
-        status_frame.place(relx=0.8, rely=0.5, anchor="w") # Canh giữa cột
-        # Center text trong status frame
-        ctk.CTkLabel(status_frame, text=item['status'], font=("Arial", 9, "bold"), text_color="white").place(relx=0.5, rely=0.5, anchor="center")
-
-        # Bind click cho cả các label con
-        for child in row.winfo_children():
-            if isinstance(child, ctk.CTkLabel):
-                child.bind("<Button-1>", on_click)
-
-    # === LOGIC FUNCTIONS ===
-    def them_moi(self):
-        messagebox.showinfo("Chức năng", "Mở form thêm hóa đơn mới")
-
-    def sua(self):
+    # [MỚI] Hàm Xuất Excel (Chọn thư mục)
+    def xuat_excel_hoadon(self):
         if not self.selected_id:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn cần sửa")
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn để xuất!")
             return
-        messagebox.showinfo("Chức năng", f"Đang sửa hóa đơn: {self.selected_id}")
 
-    def xoa(self):
+        # Mở hộp thoại chọn nơi lưu
+        default_name = f"ChiTietHoaDon_{self.selected_id}.xlsx"
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel Files", "*.xlsx")],
+            initialfile=default_name,
+            title="Lưu Chi Tiết Hóa Đơn"
+        )
+
+        if file_path:
+            ok, msg = self.controller.export_invoice_detail(self.selected_id, file_path)
+            if ok:
+                messagebox.showinfo("Thành công", msg)
+            else:
+                messagebox.showerror("Lỗi", msg)
+
+    def xem_chi_tiet(self):
         if not self.selected_id:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn cần xóa")
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn!")
             return
-        if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn xóa hóa đơn này?"):
-            # Xóa mẫu trong dummy data
-            self.dummy_data = [d for d in self.dummy_data if d['id'] != self.selected_id]
-            self.selected_id = None
-            self.load_table_data(self.dummy_data)
 
-    def in_hoadon(self):
-        if not self.selected_id:
-            messagebox.showwarning("Cảnh báo", "Chọn hóa đơn để in")
-            return
-        messagebox.showinfo("In ấn", f"Đang in hóa đơn {self.selected_id}...")
+        details = self.controller.get_details(self.selected_id)
 
-    def tim_kiem(self):
-        key = self.search_entry.get().lower()
-        if not key:
-            self.load_table_data(self.dummy_data)
-            return
-        
-        filtered = [d for d in self.dummy_data if key in d['id'].lower() or key in d['kh'].lower()]
-        self.load_table_data(filtered)
+        top = ctk.CTkToplevel(self)
+        top.title(f"Chi tiết #{self.selected_id}")
+        top.geometry("600x400")
+        top.attributes("-topmost", True)
+
+        cols = ("mon", "sl", "gia", "vat", "tong")
+        tree_dt = ttk.Treeview(top, columns=cols, show="headings", height=10)
+        tree_dt.heading("mon", text="Món");
+        tree_dt.heading("sl", text="SL")
+        tree_dt.heading("gia", text="Đơn Giá");
+        tree_dt.heading("vat", text="VAT");
+        tree_dt.heading("tong", text="Thành Tiền")
+
+        tree_dt.column("mon", width=200);
+        tree_dt.column("sl", width=50, anchor="center")
+        tree_dt.pack(fill="both", expand=True, padx=10, pady=10)
+
+        total = 0
+        for row in details:
+            tree_dt.insert("", "end", values=(
+            row['tenSanPham'], row['soLuong'], row['donGiaFmt'], row['thueVAT'], row['thanhTienFmt']))
+            # Lưu ý: Cần parse lại tiền từ chuỗi format nếu muốn tính tổng ở đây, hoặc lấy tổng từ hóa đơn cha
