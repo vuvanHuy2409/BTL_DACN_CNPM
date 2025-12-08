@@ -1,171 +1,212 @@
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk
-import os
+from tkinter import messagebox
+from src.Controller.TaiKhoan2Controller import TaiKhoan2Controller
+
 
 class TaiKhoanPage(ctk.CTkFrame):
-    def __init__(self, parent):
-        # 1. Kế thừa Frame để nhúng vào Main
-        super().__init__(parent, fg_color="white")
+    def __init__(self, parent, current_user_id):
+        """
+        parent: Frame cha chứa trang này
+        current_user_id: ID của nhân viên đang đăng nhập (Bắt buộc phải truyền đúng)
+        """
+        super().__init__(parent, fg_color="#F0F0F0")
 
-        # 2. Biến lưu ảnh
-        self.current_image_path = None
-        self.current_photo = None
+        # 1. Khởi tạo Controller & Biến
+        self.controller = TaiKhoan2Controller()
+        self.user_id = current_user_id
+        self.account_data = None
         self.is_editing = False
 
-        # 3. Tạo giao diện
-        self.tao_main_content()
-        self.load_account_info()
+        # 2. Vẽ giao diện
+        self.setup_ui()
 
-    def tao_main_content(self):
-        """Tạo nội dung chính"""
-        # Container chính
-        container = ctk.CTkFrame(self, fg_color="white")
-        container.pack(fill="both", expand=True, padx=20, pady=20)
+        # 3. [QUAN TRỌNG] Đổ dữ liệu ngay lập tức khi vào trang
+        self.load_data()
 
-        # Tiêu đề
-        ctk.CTkLabel(container, text="Hồ sơ cá nhân", font=("Arial", 18, "bold"), text_color="#333").pack(
-            anchor="center", pady=(0, 20))
+    def setup_ui(self):
+        # Cấu hình Grid layout chính
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)  # Header
+        self.grid_rowconfigure(1, weight=1)  # Thông tin
+        self.grid_rowconfigure(2, weight=1)  # Đổi mật khẩu
 
-        # ===== NÚT HÀNH ĐỘNG (Đã áp dụng màu) =====
-        action_frame = ctk.CTkFrame(container, fg_color="white")
-        action_frame.pack(anchor="center", pady=(0, 25))
+        # ================= 1. TIÊU ĐỀ =================
+        title_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=0)
+        title_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        ctk.CTkLabel(title_frame, text="QUẢN LÝ HỒ SƠ CÁ NHÂN",
+                     font=("Arial", 20, "bold"), text_color="#1565C0").pack(pady=15)
 
-        # Nút SỬA (Xanh dương)
-        ctk.CTkButton(action_frame, text="Sửa thông tin", fg_color="#2196F3", text_color="white",
-                      hover_color="#0b7dda", width=120, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6, command=self.sua_tai_khoan).pack(side="left", padx=10)
+        # ================= 2. KHUNG THÔNG TIN CÁ NHÂN =================
+        self.info_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=10)
+        self.info_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
 
-        # Nút LƯU (Xanh lá - Tương đương Thêm/Xác nhận)
-        ctk.CTkButton(action_frame, text="Lưu thay đổi", fg_color="#4CAF50", text_color="white",
-                      hover_color="#45a049", width=120, height=35, font=("Arial", 11, "bold"),
-                      corner_radius=6, command=self.luu_tai_khoan).pack(side="left", padx=10)
+        # Header Section
+        ctk.CTkLabel(self.info_frame, text="THÔNG TIN NHÂN VIÊN",
+                     font=("Arial", 14, "bold"), text_color="#333").pack(anchor="w", padx=20, pady=10)
+        ctk.CTkFrame(self.info_frame, height=2, fg_color="#E0E0E0").pack(fill="x", padx=20, pady=(0, 10))
 
-        # ===== FORM SECTION (Nền xám nhạt) =====
-        form_section = ctk.CTkFrame(container, fg_color="#f5f5f5", border_width=1, border_color="#ccc")
-        form_section.pack(fill="x", padx=50, pady=(0, 20))
+        # Grid chứa các fields input
+        fields_container = ctk.CTkFrame(self.info_frame, fg_color="white")
+        fields_container.pack(fill="both", expand=True, padx=20)
 
-        form_inner = ctk.CTkFrame(form_section, fg_color="#f5f5f5")
-        form_inner.pack(fill="both", expand=True, padx=20, pady=20)
+        # Hàng 1 (Readonly info)
+        self.entry_id = self.create_field(fields_container, "Mã NV:", 0, 0, state="disabled")
+        self.entry_role = self.create_field(fields_container, "Chức Vụ:", 0, 1, state="disabled")
+        self.entry_username = self.create_field(fields_container, "Tên Đăng Nhập:", 0, 2, state="disabled")
 
-        # Container ảnh + input
-        content_container = ctk.CTkFrame(form_inner, fg_color="#f5f5f5")
-        content_container.pack(expand=True)
+        # Hàng 2 (Editable info)
+        self.entry_name = self.create_field(fields_container, "Họ Tên:", 1, 0)
+        self.entry_phone = self.create_field(fields_container, "Số Điện Thoại:", 1, 1)
+        self.entry_email = self.create_field(fields_container, "Email:", 1, 2)
 
-        # --- Cột trái: Ảnh ---
-        avatar_column = ctk.CTkFrame(content_container, fg_color="#f5f5f5")
-        avatar_column.pack(side="left", padx=(0, 50), anchor="n")
+        # Nút chức năng (Edit/Save)
+        btn_frame = ctk.CTkFrame(self.info_frame, fg_color="white")
+        btn_frame.pack(pady=20)
 
-        # Khung chứa ảnh tròn (giả lập)
-        self.avatar_frame = ctk.CTkFrame(avatar_column, fg_color="white", width=120, height=120, corner_radius=60, border_width=2, border_color="#ddd")
-        self.avatar_frame.pack(pady=(0, 15))
-        self.avatar_frame.pack_propagate(False)
+        self.btn_edit = ctk.CTkButton(btn_frame, text="Chỉnh Sửa", fg_color="#2196F3", width=120,
+                                      command=self.toggle_edit)
+        self.btn_edit.pack(side="left", padx=10)
 
-        self.account_avatar_label = ctk.CTkLabel(self.avatar_frame, text="📷", font=("Arial", 40), text_color="#999")
-        self.account_avatar_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.btn_save = ctk.CTkButton(btn_frame, text="Lưu Thay Đổi", fg_color="#4CAF50", width=120, state="disabled",
+                                      command=self.save_info)
+        self.btn_save.pack(side="left", padx=10)
 
-        # Nút Đổi ảnh (Cyan)
-        ctk.CTkButton(avatar_column, text="Đổi ảnh", fg_color="#00BCD4", text_color="white",
-                      hover_color="#0097A7", width=100, height=30, font=("Arial", 11, "bold"),
-                      corner_radius=6, command=self.chon_anh).pack()
+        # ================= 3. KHUNG ĐỔI MẬT KHẨU =================
+        pass_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=10)
+        pass_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)
 
-        # --- Cột phải: Input ---
-        fields_column = ctk.CTkFrame(content_container, fg_color="#f5f5f5")
-        fields_column.pack(side="left")
+        ctk.CTkLabel(pass_frame, text="BẢO MẬT & ĐỔI MẬT KHẨU",
+                     font=("Arial", 14, "bold"), text_color="#333").pack(anchor="w", padx=20, pady=10)
+        ctk.CTkFrame(pass_frame, height=2, fg_color="#E0E0E0").pack(fill="x", padx=20, pady=(0, 10))
 
-        # Hàng 1
-        row1 = ctk.CTkFrame(fields_column, fg_color="#f5f5f5")
-        row1.pack(pady=10, anchor="w")
-        self.entry_id = self.create_field(row1, "ID", 100)
-        self.entry_name = self.create_field(row1, "Họ tên", 200)
-        self.entry_user = self.create_field(row1, "Username", 150)
+        pass_container = ctk.CTkFrame(pass_frame, fg_color="white")
+        pass_container.pack(fill="x", padx=20)
 
-        # Hàng 2
-        row2 = ctk.CTkFrame(fields_column, fg_color="#f5f5f5")
-        row2.pack(pady=10, anchor="w")
-        self.entry_pass = self.create_field(row2, "Mật khẩu", 150, show="*")
-        self.entry_email = self.create_field(row2, "Email", 220)
+        # Input mật khẩu
+        self.entry_old_pass = self.create_pass_field(pass_container, "Mật khẩu cũ:", 0)
+        self.entry_new_pass = self.create_pass_field(pass_container, "Mật khẩu mới:", 1)
+        self.entry_confirm_pass = self.create_pass_field(pass_container, "Xác nhận MK:", 2)
 
-        # ===== THÔNG TIN HIỂN THỊ (Readonly View) =====
-        ctk.CTkLabel(container, text="Thông tin chi tiết", font=("Arial", 14, "bold"), text_color="#555").pack(anchor="center", pady=(20, 10))
+        ctk.CTkButton(pass_frame, text="Cập Nhật Mật Khẩu", fg_color="#FF9800",
+                      width=150, height=40, font=("Arial", 12, "bold"),
+                      command=self.change_pass).pack(pady=20)
 
-        info_frame = ctk.CTkFrame(container, fg_color="#f9f9f9", border_width=1, border_color="#eee")
-        info_frame.pack(fill="x", padx=100, pady=10)
+    # ================= UI HELPERS =================
+    def create_field(self, parent, label, row, col, state="normal"):
+        """Tạo ô nhập liệu thông tin"""
+        f = ctk.CTkFrame(parent, fg_color="white")
+        f.grid(row=row, column=col, padx=10, pady=10, sticky="ew")
+        parent.grid_columnconfigure(col, weight=1)
 
-        self.info_id = self.create_info_row(info_frame, "ID")
-        self.info_name = self.create_info_row(info_frame, "Họ tên")
-        self.info_username = self.create_info_row(info_frame, "Username")
-        self.info_email = self.create_info_row(info_frame, "Email")
-
-    # ================= HELPERS =================
-    def create_field(self, parent, label, w, show=None):
-        # Frame bao quanh input có màu nền #f5f5f5
-        f = ctk.CTkFrame(parent, fg_color="#f5f5f5")
-        f.pack(side="left", padx=(0, 20))
-        
-        ctk.CTkLabel(f, text=label, font=("Arial", 11), text_color="#333").pack(anchor="w", pady=(0, 5))
-        
-        e = ctk.CTkEntry(f, width=w, show=show, height=32, border_width=1, border_color="#ccc")
-        e.pack()
+        ctk.CTkLabel(f, text=label, font=("Arial", 12), text_color="gray").pack(anchor="w")
+        e = ctk.CTkEntry(f, height=35, font=("Arial", 13), border_color="#CCC")
+        e.pack(fill="x")
+        e.configure(state=state)
         return e
 
-    def create_info_row(self, parent, label):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=20, pady=5)
-        ctk.CTkLabel(row, text=f"{label}:", width=100, anchor="w", font=("Arial", 12, "bold"), text_color="#333").pack(side="left")
-        val = ctk.CTkLabel(row, text="...", anchor="w", text_color="#555")
-        val.pack(side="left", fill="x", expand=True)
-        return val
+    def create_pass_field(self, parent, label, col):
+        """Tạo ô nhập mật khẩu (ẩn ký tự)"""
+        f = ctk.CTkFrame(parent, fg_color="white")
+        f.grid(row=0, column=col, padx=10, pady=10, sticky="ew")
+        parent.grid_columnconfigure(col, weight=1)
 
-    # ================= LOGIC =================
-    def load_account_info(self):
-        # Khóa form ban đầu
-        for e in [self.entry_id, self.entry_name, self.entry_user, self.entry_pass, self.entry_email]:
-            e.configure(state="disabled", fg_color="#e0e0e0") # Màu xám khi disabled
+        ctk.CTkLabel(f, text=label, font=("Arial", 12), text_color="gray").pack(anchor="w")
+        e = ctk.CTkEntry(f, height=35, font=("Arial", 13), show="*", border_color="#CCC")
+        e.pack(fill="x")
+        return e
 
-    def sua_tai_khoan(self):
-        self.is_editing = True
-        for e in [self.entry_id, self.entry_name, self.entry_user, self.entry_pass, self.entry_email]:
-            e.configure(state="normal", fg_color="white") # Màu trắng khi edit
-        self.entry_id.configure(state="disabled", fg_color="#e0e0e0") # ID thường không cho sửa
-        messagebox.showinfo("Thông báo", "Đã bật chế độ chỉnh sửa. Vui lòng cập nhật thông tin.")
-
-    def luu_tai_khoan(self):
-        if not self.is_editing: 
-            messagebox.showwarning("Cảnh báo", "Vui lòng nhấn nút Sửa trước khi Lưu")
+    # ================= LOGIC CHỨC NĂNG =================
+    def load_data(self):
+        """Tải thông tin nhân viên từ Controller và đổ vào View"""
+        if not self.user_id:
+            messagebox.showerror("Lỗi", "Không tìm thấy ID người dùng!")
             return
 
-        # Cập nhật thông tin hiển thị (Demo)
-        self.info_id.configure(text=self.entry_id.get())
-        self.info_name.configure(text=self.entry_name.get())
-        self.info_username.configure(text=self.entry_user.get())
-        self.info_email.configure(text=self.entry_email.get())
+        data = self.controller.get_info(self.user_id)
+        if data:
+            self.account_data = data
 
-        # Khóa lại
-        self.is_editing = False
-        for e in [self.entry_id, self.entry_name, self.entry_user, self.entry_pass, self.entry_email]:
-            e.configure(state="disabled", fg_color="#e0e0e0")
-            
-        messagebox.showinfo("Thành công", "Đã lưu thông tin tài khoản!")
+            # Fill dữ liệu Readonly (Không được sửa)
+            self.set_entry(self.entry_id, data['idNhanVien'])
+            self.set_entry(self.entry_role, data['tenChucVu'])
+            self.set_entry(self.entry_username, data['tenDangNhap'])
 
-    def chon_anh(self):
-        path = filedialog.askopenfilename(filetypes=[("Image", "*.jpg *.png *.jpeg")])
-        if path:
-            try:
-                # Resize ảnh cho vừa khung
-                img = Image.open(path)
-                # Crop ảnh thành hình vuông trước khi resize để không bị méo
-                width, height = img.size
-                new_width = min(width, height)
-                left = (width - new_width)/2
-                top = (height - new_width)/2
-                right = (width + new_width)/2
-                bottom = (height + new_width)/2
-                img = img.crop((left, top, right, bottom))
-                
-                img = img.resize((100, 100), Image.Resampling.LANCZOS)
-                self.current_photo = ImageTk.PhotoImage(img)
-                self.account_avatar_label.configure(image=self.current_photo, text="")
-                self.current_image_path = path
-            except Exception as e:
-                messagebox.showerror("Lỗi", f"Không thể tải ảnh: {e}")
+            # Fill dữ liệu Editable (Được sửa)
+            self.set_entry(self.entry_name, data['hoTen'])
+            self.set_entry(self.entry_phone, data['soDienThoai'])
+            self.set_entry(self.entry_email, data['email'])
+
+            # Khóa chế độ sửa ban đầu
+            self.lock_edit(True)
+        else:
+            messagebox.showerror("Lỗi", "Không tải được thông tin nhân viên!")
+
+    def set_entry(self, entry, text):
+        entry.configure(state="normal")
+        entry.delete(0, "end")
+        entry.insert(0, str(text) if text else "")
+        # Nếu là các trường ID, Role, User thì luôn disable sau khi set text
+        if entry in [self.entry_id, self.entry_role, self.entry_username]:
+            entry.configure(state="disabled")
+
+    def lock_edit(self, locked=True):
+        """Bật/Tắt chế độ chỉnh sửa"""
+        state = "disabled" if locked else "normal"
+        color = "#F5F5F5" if locked else "white"
+
+        # Chỉ cho sửa Tên, SĐT, Email
+        for e in [self.entry_name, self.entry_phone, self.entry_email]:
+            e.configure(state=state, fg_color=color)
+
+        if locked:
+            self.btn_edit.configure(text="Chỉnh Sửa", fg_color="#2196F3")
+            self.btn_save.configure(state="disabled")
+        else:
+            self.btn_edit.configure(text="Hủy Bỏ", fg_color="#9E9E9E")
+            self.btn_save.configure(state="normal")
+
+        self.is_editing = not locked
+
+    def toggle_edit(self):
+        if self.is_editing:
+            # Nếu đang edit mà bấm Hủy -> Load lại data cũ
+            self.load_data()
+        else:
+            # Mở khóa edit
+            self.lock_edit(False)
+
+    def save_info(self):
+        if not self.is_editing: return
+
+        ok, msg = self.controller.save_info(
+            self.user_id,
+            self.entry_name.get(),
+            self.entry_phone.get(),
+            self.entry_email.get()
+        )
+
+        if ok:
+            messagebox.showinfo("Thành công", msg)
+            self.lock_edit(True)
+        else:
+            messagebox.showerror("Lỗi", msg)
+
+    def change_pass(self):
+        if not self.account_data: return
+
+        # Gọi Controller xử lý đổi mật khẩu
+        ok, msg = self.controller.change_password(
+            self.account_data['idTaiKhoan'],
+            self.entry_old_pass.get(),
+            self.entry_new_pass.get(),
+            self.entry_confirm_pass.get()
+        )
+
+        if ok:
+            messagebox.showinfo("Thành công", msg)
+            # Xóa trắng ô nhập sau khi thành công
+            self.entry_old_pass.delete(0, "end")
+            self.entry_new_pass.delete(0, "end")
+            self.entry_confirm_pass.delete(0, "end")
+        else:
+            messagebox.showerror("Lỗi", msg)

@@ -1,6 +1,7 @@
 import customtkinter as ctk
-from tkinter import messagebox, ttk, filedialog  # Import filedialog
+from tkinter import messagebox, ttk, filedialog
 from src.Controller.HoaDonController import HoaDonController
+from datetime import datetime
 
 
 class HoaDonPage(ctk.CTkFrame):
@@ -10,183 +11,250 @@ class HoaDonPage(ctk.CTkFrame):
         self.controller = HoaDonController()
         self.current_list = []
         self.selected_id = None
-        self.selected_status_text = None
 
-        self.tao_main_content()
+        # Setup giao diện
+        self.setup_ui_layout()
+        self.style_treeview()
+
+        # Load dữ liệu ban đầu
         self.load_table_data()
 
-    def tao_main_content(self):
+    def setup_ui_layout(self):
+        # Container chính
         container = ctk.CTkFrame(self, fg_color="white")
         container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # Title
-        ctk.CTkLabel(container, text="QUẢN LÝ HÓA ĐƠN", font=("Arial", 20, "bold"), text_color="#333").pack(anchor="w",
-                                                                                                            pady=(
-                                                                                                            0, 20))
+        # Tiêu đề
+        ctk.CTkLabel(container, text="QUẢN LÝ HÓA ĐƠN ",
+                     font=("Arial", 24, "bold"), text_color="#333").pack(anchor="w", pady=(0, 20))
 
-        # Control Bar
-        control_frame = ctk.CTkFrame(container, fg_color="white")
-        control_frame.pack(fill="x", pady=(0, 15))
+        # === THANH CÔNG CỤ (TOOLBAR) ===
+        toolbar_frame = ctk.CTkFrame(container, fg_color="#F9F9F9", corner_radius=8)
+        toolbar_frame.pack(fill="x", pady=(0, 15), ipady=5)
 
-        # Buttons
-        btn_frame = ctk.CTkFrame(control_frame, fg_color="white")
-        btn_frame.pack(side="left")
+        # Dòng 1: Các nút chức năng
+        btn_row = ctk.CTkFrame(toolbar_frame, fg_color="transparent")
+        btn_row.pack(fill="x", padx=10, pady=10)
 
-        self.create_btn(btn_frame, "Xem Chi Tiết", "#2196F3", self.xem_chi_tiet)
-        self.create_btn(btn_frame, "Sửa Trạng Thái", "#FF9800", self.sua_hoa_don)  # Nút Sửa
-        self.create_btn(btn_frame, "Xuất Excel", "#009688", self.xuat_excel_hoadon)  # Nút Xuất
-        self.create_btn(btn_frame, "Tải lại", "#9E9E9E", self.load_table_data)
+        self.create_btn(btn_row, "📄 Xem Chi Tiết", "#2196F3", self.xem_chi_tiet)
+        self.create_btn(btn_row, "🖨 Xuất PDF", "#009688", self.xuat_pdf)
+        self.create_btn(btn_row, "❌ Hủy Hóa Đơn", "#F44336", self.huy_hoa_don)
+        self.create_btn(btn_row, "🔄 Tải lại", "#607D8B", self.reload_data)
 
-        # Search (Giữ nguyên)
-        # ...
+        # Dòng 2: Bộ lọc
+        filter_row = ctk.CTkFrame(toolbar_frame, fg_color="transparent")
+        filter_row.pack(fill="x", padx=10, pady=(0, 10))
 
-        # Table
+        # -- Filter Date --
+        ctk.CTkLabel(filter_row, text="Thời gian:", font=("Arial", 12, "bold")).pack(side="left", padx=(0, 5))
+
+        days = ["Tất cả"] + [str(i) for i in range(1, 32)]
+        self.cb_day = ctk.CTkComboBox(filter_row, values=days, width=70, state="readonly")
+        self.cb_day.set("Tất cả")
+        self.cb_day.pack(side="left", padx=2)
+
+        months = ["Tất cả"] + [str(i) for i in range(1, 13)]
+        self.cb_month = ctk.CTkComboBox(filter_row, values=months, width=70, state="readonly")
+        self.cb_month.set(str(datetime.now().month))  # Mặc định tháng hiện tại
+        self.cb_month.pack(side="left", padx=2)
+
+        self.entry_year = ctk.CTkEntry(filter_row, width=60, placeholder_text="Năm")
+        self.entry_year.insert(0, str(datetime.now().year))
+        self.entry_year.pack(side="left", padx=2)
+
+        # -- Search --
+        ctk.CTkLabel(filter_row, text="|  Tìm kiếm:", font=("Arial", 12, "bold")).pack(side="left", padx=(15, 5))
+        self.search_entry = ctk.CTkEntry(filter_row, width=250,
+                                         placeholder_text="Nhập Mã HĐ, Tên KH hoặc Nội dung CK...")
+        self.search_entry.pack(side="left", padx=5)
+
+        ctk.CTkButton(filter_row, text="🔍 Tìm Kiếm", width=100, fg_color="#3F51B5",
+                      command=self.thuc_hien_loc).pack(side="left", padx=10)
+
+        # === BẢNG DỮ LIỆU (TREEVIEW) ===
         table_frame = ctk.CTkFrame(container, fg_color="white")
         table_frame.pack(fill="both", expand=True)
 
-        # [CẬP NHẬT] Thêm cột Ngày Sửa
-        cols = ("id", "kh", "nv", "ngay", "ngaysua", "tien", "tt")
-        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", height=15)
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
 
-        self.tree.heading("id", text="Mã HĐ")
+        # Cấu hình cột
+        cols = ("id", "kh", "nv", "ngay", "tien", "pay", "tt")
+        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings",
+                                 height=15, yscrollcommand=scrollbar.set)
+
+        scrollbar.config(command=self.tree.yview)
+
+        # Tiêu đề cột
+        # [QUAN TRỌNG] Cột id bây giờ hiển thị Mã hoặc Nội dung CK -> Cần rộng hơn
+        self.tree.heading("id", text="Mã HĐ / Nội dung CK")
         self.tree.heading("kh", text="Khách Hàng")
-        self.tree.heading("nv", text="NV Lập")
+        self.tree.heading("nv", text="Nhân Viên")
         self.tree.heading("ngay", text="Ngày Tạo")
-        self.tree.heading("ngaysua", text="Ngày Sửa")  # Cột mới
         self.tree.heading("tien", text="Tổng Tiền")
+        self.tree.heading("pay", text="Hình thức TT")
         self.tree.heading("tt", text="Trạng Thái")
 
-        self.tree.column("id", width=60, anchor="center")
+        # Kích thước cột
+        self.tree.column("id", width=180, anchor="w")  # Canh trái để đọc nội dung CK dễ hơn
         self.tree.column("kh", width=150)
-        self.tree.column("nv", width=150)
+        self.tree.column("nv", width=120)
         self.tree.column("ngay", width=120, anchor="center")
-        self.tree.column("ngaysua", width=120, anchor="center")
-        self.tree.column("tien", width=120, anchor="e")
+        self.tree.column("tien", width=100, anchor="e")
+        self.tree.column("pay", width=150, anchor="center")
         self.tree.column("tt", width=100, anchor="center")
 
-        self.tree.tag_configure('success', foreground='green')
-        self.tree.tag_configure('cancel', foreground='red')
-        self.tree.tag_configure('wait', foreground='orange')
+        # Màu sắc trạng thái
+        self.tree.tag_configure('success', foreground='green')  # Đã thanh toán
+        self.tree.tag_configure('cancel', foreground='red')  # Đã hủy
+        self.tree.tag_configure('wait', foreground='#F57C00')  # Chờ thanh toán
 
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
 
-    def create_btn(self, parent, text, color, cmd):
-        ctk.CTkButton(parent, text=text, fg_color=color, width=120, height=32, command=cmd).pack(side="left", padx=5)
+    def style_treeview(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview.Heading", font=("Arial", 11, "bold"), background="#E0E0E0", padding=5)
+        style.configure("Treeview", font=("Arial", 10), rowheight=28)
 
-    # === LOGIC ===
-    def load_table_data(self):
-        for i in self.tree.get_children(): self.tree.delete(i)
-        self.current_list = self.controller.get_list_invoices()
+    def create_btn(self, parent, text, color, cmd):
+        ctk.CTkButton(parent, text=text, fg_color=color, hover_color=color,
+                      width=110, height=35, command=cmd).pack(side="left", padx=5)
+
+    # === LOGIC DỮ LIỆU ===
+    def load_table_data(self, data=None):
+        # Xóa dữ liệu cũ
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+
+        self.selected_id = None  # Reset selection
+
+        if data is None:
+            self.current_list = self.controller.get_list_invoices()
+        else:
+            self.current_list = data
 
         for item in self.current_list:
+            # Xác định màu sắc
             tag = 'wait'
             if item['trangThai'] == 2:
                 tag = 'success'
             elif item['trangThai'] == 0:
                 tag = 'cancel'
 
-            self.tree.insert("", "end", values=(
-                item['idHoaDon'],
+            # [QUAN TRỌNG NHẤT]
+            # 1. 'iid' (Internal ID): Gán bằng ID thật của Database (item['idHoaDon'])
+            #    để khi click vào dòng, ta lấy được ID này để xử lý.
+            # 2. values[0]: Hiển thị 'maHienThi' (đã xử lý ở Controller: là Nội dung CK hoặc #ID)
+
+            self.tree.insert("", "end", iid=item['idHoaDon'], values=(
+                item['maHienThi'],  # Cột 1: Hiển thị nội dung
                 item['tenKhachHang'],
                 item['tenNhanVien'],
                 item['ngayTaoFmt'],
-                item['ngaySuaFmt'],  # Hiển thị ngày sửa
                 item['tongTienFmt'],
+                item['paymentMethod'],
                 item['statusText']
             ), tags=(tag,))
 
     def on_select(self, event):
         sel = self.tree.selection()
         if sel:
-            val = self.tree.item(sel[0], 'values')
-            self.selected_id = val[0]
-            self.selected_status_text = val[6]  # Lấy trạng thái hiện tại
+            # Lấy ID thật từ iid (không phải từ values[0])
+            self.selected_id = sel[0]
+            # print(f"Selected Real ID: {self.selected_id}")
 
-    # [MỚI] Hàm Sửa Hóa Đơn
-    def sua_hoa_don(self):
+    def thuc_hien_loc(self):
+        d = self.cb_day.get()
+        m = self.cb_month.get()
+        y = self.entry_year.get()
+        kw = self.search_entry.get().strip()
+
+        data = self.controller.filter_invoices(d, m, y, kw)
+        self.load_table_data(data)
+
+    def reload_data(self):
+        self.search_entry.delete(0, "end")
+        self.cb_day.set("Tất cả")
+        # Giữ lại tháng hiện tại hoặc reset tùy ý
+        self.load_table_data(None)
+
+    # === CÁC CHỨC NĂNG ===
+    def huy_hoa_don(self):
         if not self.selected_id:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn cần sửa!")
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn cần hủy!")
             return
 
-        # Tạo Popup
-        w = ctk.CTkToplevel(self)
-        w.title(f"Sửa Hóa Đơn #{self.selected_id}")
-        w.geometry("300x200")
-        w.attributes("-topmost", True)
-
-        ctk.CTkLabel(w, text="Cập nhật trạng thái:", font=("Arial", 14, "bold")).pack(pady=20)
-
-        # Combobox chọn trạng thái
-        statuses = ["Chờ thanh toán", "Đã thanh toán", "Đã hủy"]
-        cb_status = ctk.CTkComboBox(w, values=statuses, state="readonly", width=200)
-        cb_status.set(self.selected_status_text)  # Set giá trị hiện tại
-        cb_status.pack(pady=10)
-
-        def save_change():
-            new_status = cb_status.get()
-            if new_status == self.selected_status_text:
-                w.destroy();
-                return  # Không đổi gì cả
-
-            ok, msg = self.controller.edit_invoice(self.selected_id, new_status)
-            if ok:
-                messagebox.showinfo("Thành công", msg)
-                self.load_table_data()  # Reload để thấy ngày sửa mới
-                w.destroy()
+        # Kiểm tra trạng thái hiện tại (Optional: Không cho hủy nếu đã thanh toán?)
+        # Ở đây cho phép hủy nhưng hỏi kỹ
+        if messagebox.askyesno("Xác nhận", f"Bạn chắc chắn muốn hủy hóa đơn #{self.selected_id}?"):
+            if self.controller.delete_invoice(self.selected_id):
+                messagebox.showinfo("Thành công", "Đã hủy hóa đơn!")
+                self.thuc_hien_loc()  # Load lại nhưng giữ bộ lọc
             else:
-                messagebox.showerror("Lỗi", msg)
+                messagebox.showerror("Lỗi", "Không thể hủy hóa đơn này!")
 
-        ctk.CTkButton(w, text="Lưu Thay Đổi", fg_color="#4CAF50", command=save_change).pack(pady=10)
-
-    # [MỚI] Hàm Xuất Excel (Chọn thư mục)
-    def xuat_excel_hoadon(self):
+    def xuat_pdf(self):
         if not self.selected_id:
             messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn để xuất!")
             return
 
-        # Mở hộp thoại chọn nơi lưu
-        default_name = f"ChiTietHoaDon_{self.selected_id}.xlsx"
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".xlsx",
-            filetypes=[("Excel Files", "*.xlsx")],
-            initialfile=default_name,
-            title="Lưu Chi Tiết Hóa Đơn"
-        )
-
-        if file_path:
-            ok, msg = self.controller.export_invoice_detail(self.selected_id, file_path)
+        file_name = f"HoaDon_{self.selected_id}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        path = filedialog.asksaveasfilename(defaultextension=".pdf",
+                                            initialfile=file_name,
+                                            filetypes=[("PDF Files", "*.pdf")])
+        if path:
+            ok, msg = self.controller.export_invoice_pdf(self.selected_id, path)
             if ok:
                 messagebox.showinfo("Thành công", msg)
             else:
-                messagebox.showerror("Lỗi", msg)
+                messagebox.showerror("Thất bại", msg)
 
     def xem_chi_tiet(self):
         if not self.selected_id:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn!")
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn hóa đơn để xem!")
             return
 
         details = self.controller.get_details(self.selected_id)
 
+        # Tạo cửa sổ Popup (Toplevel)
         top = ctk.CTkToplevel(self)
-        top.title(f"Chi tiết #{self.selected_id}")
-        top.geometry("600x400")
-        top.attributes("-topmost", True)
+        top.geometry("700x400")
+        top.title(f"Chi tiết Hóa Đơn #{self.selected_id}")
+        top.attributes("-topmost", True)  # Luôn nổi lên trên
 
+        # Tiêu đề popup
+        ctk.CTkLabel(top, text="DANH SÁCH MÓN", font=("Arial", 16, "bold")).pack(pady=10)
+
+        # Bảng chi tiết
         cols = ("mon", "sl", "gia", "vat", "tong")
-        tree_dt = ttk.Treeview(top, columns=cols, show="headings", height=10)
-        tree_dt.heading("mon", text="Món");
-        tree_dt.heading("sl", text="SL")
-        tree_dt.heading("gia", text="Đơn Giá");
-        tree_dt.heading("vat", text="VAT");
-        tree_dt.heading("tong", text="Thành Tiền")
+        tree_detail = ttk.Treeview(top, columns=cols, show="headings", height=10)
 
-        tree_dt.column("mon", width=200);
-        tree_dt.column("sl", width=50, anchor="center")
-        tree_dt.pack(fill="both", expand=True, padx=10, pady=10)
+        tree_detail.heading("mon", text="Tên Món")
+        tree_detail.heading("sl", text="Số Lượng")
+        tree_detail.heading("gia", text="Đơn Giá")
+        tree_detail.heading("vat", text="VAT (%)")
+        tree_detail.heading("tong", text="Thành Tiền")
 
-        total = 0
-        for row in details:
-            tree_dt.insert("", "end", values=(
-            row['tenSanPham'], row['soLuong'], row['donGiaFmt'], row['thueVAT'], row['thanhTienFmt']))
-            # Lưu ý: Cần parse lại tiền từ chuỗi format nếu muốn tính tổng ở đây, hoặc lấy tổng từ hóa đơn cha
+        tree_detail.column("mon", width=250)
+        tree_detail.column("sl", width=80, anchor="center")
+        tree_detail.column("gia", width=100, anchor="e")
+        tree_detail.column("vat", width=80, anchor="center")
+        tree_detail.column("tong", width=120, anchor="e")
+
+        tree_detail.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
+        # Đổ dữ liệu
+        for item in details:
+            tree_detail.insert("", "end", values=(
+                item['tenSanPham'],
+                item['soLuong'],
+                item['donGiaFmt'],
+                item['thueVAT'],
+                item['thanhTienFmt']
+            ))
+
+        ctk.CTkButton(top, text="Đóng", fg_color="#F44336", width=100,
+                      command=top.destroy).pack(pady=10)

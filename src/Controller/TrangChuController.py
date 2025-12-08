@@ -12,32 +12,42 @@ import unicodedata
 class TrangChuController:
     def __init__(self):
         self.model = TrangChuModel()
-
-        # Quản lý Giỏ hàng từng bàn: {table_id: {prod_id: info}}
-        self.table_carts = {}
-
-        # Quản lý Khách hàng từng bàn: {table_id: customer_dict}
-        self.table_customers = {}
-
         self.selected_table_id = None
 
-        # Cấu hình Thuế VAT
-        self.VAT_RATE = 0.10  # 10%
+        # Cấu hình Thuế VAT (10%)
+        # Logic: Giá bán trong Menu là giá đã bao gồm thuế (Gross Price)
+        self.VAT_RATE = 0.10
 
-        # Tạo thư mục lưu hóa đơn nếu chưa có
+        # Tạo thư mục lưu hóa đơn
         self.invoice_dir = "src/hoadon"
         if not os.path.exists(self.invoice_dir):
             os.makedirs(self.invoice_dir)
 
-    # ================= CÁC HÀM HỖ TRỢ =================
+    # ================= 1. CÁC HÀM TIỆN ÍCH (UTILS) =================
     def remove_accents(self, input_str):
-        """Chuyển tiếng Việt có dấu thành không dấu"""
+        """Chuyển tiếng Việt có dấu thành không dấu (Để xuất PDF không lỗi font)"""
         if not input_str: return ""
         nfkd = unicodedata.normalize('NFKD', str(input_str))
         return "".join([c for c in nfkd if not unicodedata.combining(c)])
 
-    # ================= QUẢN LÝ MENU & BÀN =================
+    def format_money(self, value):
+        """Định dạng tiền tệ: 100000 -> 100,000"""
+        return "{:,.0f}".format(value)
 
+    def generate_invoice_code(self):
+        """
+        Tạo mã hóa đơn: HD-DDMMYYYY-XXXYY
+        VD: HD-09122025-123Ab
+        """
+        date_str = datetime.now().strftime('%d%m%Y')
+        # 3 số ngẫu nhiên
+        random_digits = f"{random.randint(0, 999):03d}"
+        # 2 chữ cái ngẫu nhiên (kết hợp hoa thường)
+        random_chars = ''.join(random.choices(string.ascii_letters, k=2))
+
+        return f"HD-{date_str}-{random_digits}{random_chars}"
+
+    # ================= 2. QUẢN LÝ MENU & BÀN =================
     def get_menu_grouped_by_category(self):
         result = []
         categories = self.model.get_all_categories()
@@ -48,241 +58,325 @@ class TrangChuController:
         return result
 
     def select_table(self, table_id):
-        """Chọn bàn để thao tác"""
         self.selected_table_id = table_id
-        if table_id not in self.table_carts:
-            self.table_carts[table_id] = {}
 
     def get_table_status(self, table_id):
-        """Lấy trạng thái bàn để tô màu UI"""
+        active_ids = self.model.get_active_tables()
         if table_id == self.selected_table_id: return "selected"
-        if table_id in self.table_carts and self.table_carts[table_id]: return "active"
+        if table_id in active_ids: return "active"
         return "empty"
 
-    # [FIXED] Hàm này bị thiếu gây lỗi AttributeError
     def get_table_total_money(self, table_id):
-        """Tính tổng tiền tạm tính (bao gồm thuế) cho bàn cụ thể"""
-        if table_id not in self.table_carts:
-            return 0
+        active_infos = self.model.get_active_tables_info()
+        for row in active_infos:
+            if row['idBan'] == table_id:
+                return float(row['tongTien']) if row['tongTien'] else 0
+        return 0
 
-        cart = self.table_carts[table_id]
-        if not cart: return 0
+    # ================= 3. QUẢN LÝ GIỎ HÀNG (CART) =================
+    def get_current_invoice_id(self):
+        if not self.selected_table_id: return None
+        return self.model.get_active_invoice_id(self.selected_table_id)
 
-        # Tính tổng tiền gốc
-        raw_total = sum(item['sl'] * item['gia'] for item in cart.values())
+    def add_to_cart(self, product, id_nv_login):
+        if not self.selected_table_id: return False, "Chưa chọn bàn!"
 
-        # Cộng thêm thuế VAT
-        total_with_tax = raw_total * (1 + self.VAT_RATE)
-        return total_with_tax
+        id_hd = self.get_current_invoice_id()
+        if not id_hd:
+            id_hd = self.model.create_invoice_for_table(id_nv_login, self.selected_table_id)
 
-    # ================= QUẢN LÝ GIỎ HÀNG =================
+        if not id_hd: return False, "Lỗi tạo hóa đơn!"
 
-    def add_to_cart_by_id(self, product):
-        if self.selected_table_id is None: return False, "Chưa chọn bàn!"
-
-        cart = self.table_carts[self.selected_table_id]
-        id_sp = product['idSanPham']
-
-        if id_sp in cart:
-            cart[id_sp]['sl'] += 1
-        else:
-            cart[id_sp] = {
-                'name': product['tenSanPham'],
-                'sl': 1,
-                'gia': float(product['giaBan'])
-            }
-        return True, "Ok"
+        ok = self.model.add_or_update_item(id_hd, product['idSanPham'], 1, float(product['giaBan']))
+        if ok: self.model.update_invoice_total_money(id_hd)
+        return ok, "Thêm thành công"
 
     def remove_item_from_cart(self, product_name):
-        if self.selected_table_id is None: return False
-        cart = self.table_carts.get(self.selected_table_id, {})
+        id_hd = self.get_current_invoice_id()
+        if not id_hd: return False
 
+        details = self.model.get_invoice_details(id_hd)
         target_id = None
-        for pid, info in cart.items():
-            if info['name'] == product_name:
-                target_id = pid;
+        for d in details:
+            if d['tenSanPham'] == product_name:
+                target_id = d['idSanPham']
                 break
 
         if target_id:
-            del cart[target_id]
-            return True
+            ok = self.model.add_or_update_item(id_hd, target_id, -1, 0)
+            if ok: self.model.update_invoice_total_money(id_hd)
+            return ok
         return False
 
     def get_cart_display(self):
-        """Lấy dữ liệu hiển thị cho View (Đã tính thuế)"""
-        if self.selected_table_id is None or self.selected_table_id not in self.table_carts:
-            return [], "0", 0
+        """Dữ liệu hiển thị đơn giản cho Treeview (View)"""
+        id_hd = self.get_current_invoice_id()
+        if not id_hd: return [], "0", 0
 
-        cart = self.table_carts[self.selected_table_id]
+        details = self.model.get_invoice_details(id_hd)
         display_list = []
         total_bill = 0
+        for item in details:
+            money = float(item['thanhTien'])
+            total_bill += money
+            display_list.append((item['tenSanPham'], item['soLuong'], self.format_money(money)))
+        return display_list, self.format_money(total_bill), total_bill
 
-        for p_id, info in cart.items():
-            # Thành tiền = SL * Giá * (1 + VAT)
-            thanh_tien = info['sl'] * info['gia'] * (1 + self.VAT_RATE)
-            total_bill += thanh_tien
+    def get_cart_display_full_info(self):
+        """Dữ liệu chi tiết cho PDF (Trả về số thực để tính toán)"""
+        id_hd = self.get_current_invoice_id()
+        if not id_hd: return [], "0", 0
 
-            display_list.append((info['name'], info['sl'], "{:,.0f}".format(thanh_tien)))
-
-        return display_list, "{:,.0f}".format(total_bill), total_bill
+        details = self.model.get_invoice_details(id_hd)
+        display_list = []
+        total_bill = 0
+        for item in details:
+            money = float(item['thanhTien'])
+            total_bill += money
+            display_list.append((
+                item['tenSanPham'],
+                item['soLuong'],
+                self.format_money(float(item['donGia'])),
+                money  # Raw number for PDF calculation
+            ))
+        return display_list, self.format_money(total_bill), total_bill
 
     def clear_current_cart(self):
-        if self.selected_table_id in self.table_carts:
-            self.table_carts[self.selected_table_id] = {}
-        self.remove_customer_from_table()
+        return self.model.cancel_invoice(self.get_current_invoice_id())
 
-    # ================= QUẢN LÝ KHÁCH HÀNG =================
-
+    # ================= 4. KHÁCH HÀNG =================
     def get_current_table_customer(self):
-        if self.selected_table_id in self.table_customers:
-            return self.table_customers[self.selected_table_id]
+        id_hd = self.get_current_invoice_id()
+        if id_hd: return self.model.get_invoice_customer(id_hd)
         return None
 
-    def assign_customer_to_table(self, customer_data):
-        if self.selected_table_id is not None:
-            self.table_customers[self.selected_table_id] = customer_data
-            return True
-        return False
-
-    def remove_customer_from_table(self):
-        if self.selected_table_id in self.table_customers:
-            del self.table_customers[self.selected_table_id]
-
-    def find_customer(self, sdt):
+    def find_and_assign_customer(self, sdt, id_nv_login=1):
         cust = self.model.search_customer(sdt)
         if cust:
-            self.assign_customer_to_table(cust)
-            return True, cust
+            id_hd = self.get_current_invoice_id()
+            if not id_hd:
+                id_hd = self.model.create_invoice_for_table(id_nv_login, self.selected_table_id)
+            if id_hd:
+                self.model.update_invoice_customer(id_hd, cust['idKhachHang'])
+                return True, cust
         return False, None
 
     def create_customer(self, ten, sdt, dob_str):
-        if not ten or not sdt: return False, "Thiếu tên hoặc SĐT!"
         try:
-            dob_obj = datetime.strptime(dob_str, "%d/%m/%Y")
-            dob_sql = dob_obj.strftime("%Y-%m-%d")
+            d_obj = datetime.strptime(dob_str, "%d/%m/%Y")
+            d_sql = d_obj.strftime("%Y-%m-%d")
+            id_new = self.model.add_customer(ten, sdt, d_sql)
+            return (True, "Thêm thành công!") if id_new else (False, "Lỗi thêm khách!")
         except:
-            return False, "Ngày sinh không hợp lệ (dd/mm/yyyy)!"
+            return False, "Lỗi ngày sinh!"
 
-        id_new = self.model.add_customer(ten, sdt, dob_sql)
-        if id_new:
-            return True, "Thêm thành công!"
-        return False, "Lỗi thêm khách hàng!"
+    def get_customer_suggestions(self, sdt_part):
+        if not sdt_part: return []
+        return self.model.suggest_customers_by_phone(sdt_part)
 
-    # ================= THANH TOÁN & PDF =================
-
-    def generate_invoice_code(self):
-        date_str = datetime.now().strftime("%d%m%Y")
-        xxx = str(random.randint(100, 999))
-        yy = ''.join(random.choices(string.ascii_lowercase, k=2))
-        return f"HD-{date_str}-{xxx}{yy}"
-
-    def create_pdf_invoice(self, invoice_code, total_money, cart, qr_path=None):
-        filename = os.path.join(self.invoice_dir, f"{invoice_code}.pdf")
-        try:
-            c = canvas.Canvas(filename, pagesize=A4)
-            c.setFont("Helvetica", 12)
-
-            y = 800
-            c.setFont("Helvetica-Bold", 16)
-            c.drawCentredString(300, y, "HOA DON THANH TOAN")
-            y -= 30
-
-            c.setFont("Helvetica", 12)
-            c.drawString(50, y, f"Ma HD: {invoice_code}")
-            y -= 20
-            c.drawString(50, y, f"Ngay: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-            y -= 40
-
-            # Header
-            c.line(50, y, 550, y);
-            y -= 20
-            c.drawString(50, y, "Mon");
-            c.drawString(350, y, "SL");
-            c.drawString(450, y, "Thanh Tien")
-            y -= 10;
-            c.line(50, y, 550, y);
-            y -= 20
-
-            # Nội dung
-            for info in cart.values():
-                name = self.remove_accents(info['name'])  # Xử lý tiếng Việt cho PDF
-                # Tính tiền từng dòng (có thuế)
-                subtotal = info['sl'] * info['gia'] * (1 + self.VAT_RATE)
-
-                c.drawString(50, y, name)
-                c.drawString(350, y, str(info['sl']))
-                c.drawString(450, y, "{:,.0f}".format(subtotal))
-                y -= 20
-
-            c.line(50, y, 550, y);
-            y -= 30
-            c.setFont("Helvetica-Bold", 14)
-            c.drawString(300, y, f"TONG CONG: {total_money:,.0f} VND")
-
-            if qr_path:
-                y -= 220
-                c.drawImage(qr_path, 200, y, width=200, height=200)
-                c.drawString(230, y - 20, "Quet ma de thanh toan")
-
-            c.save()
-            return filename
-        except Exception as e:
-            print(f"Lỗi PDF: {e}")
-            return None
-
+    # ================= 5. THANH TOÁN & PDF & QR =================
     def get_bank_list(self):
         return self.model.get_active_banks()
 
-    def get_qr_image_path(self, bank_data, amount, content):
+    def get_qr_image_path(self, bank_info, amount, content):
+        """Gọi API VietQR tạo ảnh"""
         try:
-            bank_id = bank_data['maNganHang']
-            acc_no = bank_data['soTaiKhoan']
-            safe_content = content.replace(" ", "")
-            api_url = f"https://img.vietqr.io/image/{bank_id}-{acc_no}-compact.png?amount={int(amount)}&addInfo={safe_content}"
-
-            response = requests.get(api_url)
-            if response.status_code == 200:
-                qr_path = "temp_qr.png"
-                with open(qr_path, 'wb') as f:
-                    f.write(response.content)
-                return qr_path
+            api_url = f"https://img.vietqr.io/image/{bank_info['maNganHang']}-{bank_info['soTaiKhoan']}-compact.png"
+            params = {'amount': int(amount), 'addInfo': content, 'accountName': bank_info['tenTaiKhoan']}
+            res = requests.get(api_url, params=params)
+            if res.status_code == 200:
+                path = "temp_qr.png"
+                with open(path, "wb") as f: f.write(res.content)
+                return path
         except:
-            pass
+            return None
         return None
 
-    def process_payment(self, method, id_nv, bank_info=None):
-        if self.selected_table_id is None: return False, "Chưa chọn bàn!"
+    def create_pdf(self, filename, invoice_info, items, totals, qr_path=None):
+        """
+        Tạo PDF hóa đơn chi tiết, đẹp mắt, có xử lý phân trang và QR code.
+        """
+        try:
+            c = canvas.Canvas(filename, pagesize=A4)
+            width, height = A4
 
-        cart = self.table_carts.get(self.selected_table_id, {})
-        if not cart: return False, "Bàn trống!"
+            # Hàm rút gọn bỏ dấu
+            def txt(t):
+                return self.remove_accents(str(t))
 
-        # Tính tổng tiền (Có thuế)
-        total_money = sum((item['sl'] * item['gia']) * (1 + self.VAT_RATE) for item in cart.values())
+            # --- HEADER ---
+            y = 800
+            c.setFont("Helvetica-Bold", 22)
+            c.drawCentredString(width / 2, y, "COFFEE SHOP RECEIPT")
+            y -= 25
+            c.setFont("Helvetica", 10)
+            c.drawCentredString(width / 2, y, "Dia chi: 123 Duong ABC, Quan 1, TP.HCM")
+            y -= 15
+            c.drawCentredString(width / 2, y, "Hotline: 0909 123 456")
+            y -= 25
+            c.line(50, y, 545, y)  # Kẻ ngang
 
-        invoice_code = self.generate_invoice_code()
+            # --- THÔNG TIN CHUNG ---
+            y -= 25
+            c.setFont("Helvetica", 11)
 
-        current_cust = self.get_current_table_customer()
-        id_kh = current_cust['idKhachHang'] if current_cust else None
+            # Cột trái
+            c.drawString(50, y, txt(f"Ma HD: {invoice_info['code']}"))
+            c.drawString(50, y - 15, txt(f"Ban: {invoice_info['table']}"))
+            c.drawString(50, y - 30, txt(f"Vao: {invoice_info['check_in']}"))
+            c.drawString(50, y - 45, txt(f"Ra:  {invoice_info['check_out']}"))
 
-        db_items = [{'id_sp': k, 'sl': v['sl'], 'gia': v['gia']} for k, v in cart.items()]
+            # Cột phải
+            c.drawRightString(545, y, txt(f"Nhan vien: {invoice_info['staff']}"))
+            c.drawRightString(545, y - 15, txt(f"Khach: {invoice_info['customer']}"))
+            c.drawRightString(545, y - 30, txt(f"HTTT: {invoice_info['payment_method']}"))
 
-        # Lưu DB
-        ok, msg = self.model.create_invoice(id_nv, id_kh, total_money, db_items, method)
+            y -= 65
 
-        if ok:
-            if id_kh: self.model.add_loyalty_points(id_kh, 10)
+            # --- BẢNG SẢN PHẨM ---
+            c.line(50, y, 545, y)
+            y -= 15
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(50, y, "TEN MON")
+            c.drawCentredString(300, y, "SL")
+            c.drawRightString(420, y, "DON GIA")
+            c.drawRightString(545, y, "THANH TIEN")
+            y -= 10
+            c.line(50, y, 545, y)
+            y -= 20
 
-            # Xử lý QR và PDF
-            qr_path = None
-            if method == 'ChuyenKhoan' and bank_info:
-                qr_path = self.get_qr_image_path(bank_info, total_money, invoice_code)
+            c.setFont("Helvetica", 10)
+            for item in items:
+                # item: (Name, Qty, Price_Str, Raw_Total)
+                name = txt(item[0])
+                if len(name) > 40: name = name[:37] + "..."  # Cắt tên dài nếu quá khổ
+                qty = str(item[1])
+                price = item[2]
+                row_total = self.format_money(item[3])
 
-            pdf_file = self.create_pdf_invoice(invoice_code, total_money, cart, qr_path)
+                c.drawString(50, y, name)
+                c.drawCentredString(300, y, qty)
+                c.drawRightString(420, y, price)
+                c.drawRightString(545, y, row_total)
+                y -= 20
 
-            # Dọn dẹp
-            if qr_path and os.path.exists(qr_path): os.remove(qr_path)
-            self.clear_current_cart()
+                # --- XỬ LÝ SANG TRANG NẾU HẾT CHỖ ---
+                if y < 100:
+                    c.showPage()
+                    y = 800
+                    c.setFont("Helvetica", 10)  # Set lại font cho trang mới
 
-            return True, f"Thanh toán thành công!\nHĐ: {invoice_code}\nPDF: {pdf_file}"
+            # --- TỔNG KẾT ---
+            y -= 10
+            c.line(50, y, 545, y)
+            y -= 25
 
-        return False, msg
+            c.setFont("Helvetica", 10)
+            c.drawRightString(450, y, "Tam tinh:")
+            c.drawRightString(545, y, self.format_money(totals['subtotal']))
+            y -= 15
+            c.drawRightString(450, y, f"VAT ({int(self.VAT_RATE * 100)}%):")
+            c.drawRightString(545, y, self.format_money(totals['vat']))
+            y -= 20
+
+            c.setFont("Helvetica-Bold", 14)
+            c.drawRightString(450, y, "TONG CONG:")
+            c.drawRightString(545, y, f"{self.format_money(totals['total'])} VND")
+
+            # --- VẼ MÃ QR (ĐÃ FIX LỖI) ---
+            if qr_path and os.path.exists(qr_path):
+                # Kiểm tra còn đủ chỗ vẽ QR không (cần khoảng 150px)
+                if y < 150:
+                    c.showPage()  # Sang trang mới
+                    y = 750  # Reset y
+
+                y -= 120  # Dành không gian
+
+                # Vẽ khung viền QR
+                c.rect((width - 104) / 2, y - 2, 104, 104, stroke=1, fill=0)
+                # Vẽ ảnh QR
+                c.drawImage(qr_path, (width - 100) / 2, y, width=100, height=100)
+
+                y -= 15
+                c.setFont("Helvetica-Oblique", 8)
+                c.drawCentredString(width / 2, y, "(Quet ma de doi chieu giao dich)")
+
+            # --- FOOTER ---
+            # Luôn vẽ ở chân trang
+            c.setFont("Helvetica-Oblique", 10)
+            c.drawCentredString(width / 2, 30, "Xin cam on quy khach va hen gap lai!")
+
+            c.save()
+            return True
+        except Exception as e:
+            print(f"Lỗi tạo PDF: {e}")
+            return False
+
+    def process_payment(self, method="TienMat", id_nv=1, bank_info=None, noi_dung_ck=None, qr_path=None):
+        """
+        Quy trình thanh toán:
+        1. Tính toán tiền, thuế.
+        2. Lấy thông tin Header.
+        3. Cập nhật Database (Chốt đơn).
+        4. Cộng điểm tích lũy.
+        5. Xuất PDF (kèm QR nếu có).
+        """
+        id_hd = self.get_current_invoice_id()
+        if not id_hd: return False, "Bàn trống!"
+
+        # 1. Tính toán
+        cart_items, _, total_bill = self.get_cart_display_full_info()
+
+        # Tách VAT (Giả sử Total Bill là giá Gross đã gồm thuế)
+        subtotal = total_bill / (1 + self.VAT_RATE)
+        vat_amount = total_bill - subtotal
+        totals = {'subtotal': subtotal, 'vat': vat_amount, 'total': total_bill}
+
+        # 2. Thông tin Header
+        header_info = self.model.get_invoice_general_info(id_hd)
+        if not header_info: return False, "Lỗi lấy thông tin hóa đơn!"
+
+        check_in = header_info['ngayTao'].strftime("%d/%m/%Y %H:%M")
+        check_out = datetime.now().strftime("%d/%m/%Y %H:%M")
+        staff_name = header_info['tenNhanVien']
+        cust_name = header_info['tenKhachHang'] if header_info['tenKhachHang'] else "Khach le"
+
+        # 3. Chuẩn bị dữ liệu DB
+        id_ngan_hang = bank_info['idNganHang'] if (method == 'ChuyenKhoan' and bank_info) else None
+
+        # Nếu CK: Dùng mã từ View truyền xuống. Nếu TM: Tạo mã mới
+        if method == 'ChuyenKhoan' and noi_dung_ck:
+            final_noi_dung = noi_dung_ck
+            display_code = noi_dung_ck
+        else:
+            display_code = self.generate_invoice_code()
+            final_noi_dung = f"{display_code} (TM)"
+
+        # 4. GỌI MODEL
+        if self.model.finalize_invoice(id_hd, 2, total_bill, id_ngan_hang, final_noi_dung):
+            # Cộng điểm tích lũy
+            if header_info['tenKhachHang']:
+                current_cust = self.get_current_table_customer()
+                if current_cust:
+                    self.model.add_loyalty_points(current_cust['idKhachHang'], 10)
+
+            # 5. XUẤT PDF
+            invoice_info = {
+                'code': display_code,
+                'check_in': check_in,
+                'check_out': check_out,
+                'table': self.selected_table_id,
+                'staff': staff_name,
+                'customer': cust_name,
+                'payment_method': "Chuyen Khoan" if method == 'ChuyenKhoan' else "Tien Mat"
+            }
+
+            # Chỉ in QR nếu là CK và có file ảnh
+            final_qr_path = qr_path if method == 'ChuyenKhoan' else None
+
+            pdf_path = os.path.join(self.invoice_dir, f"{display_code}.pdf")
+            self.create_pdf(pdf_path, invoice_info, cart_items, totals, final_qr_path)
+
+            return True, f"Thanh toán thành công!\nMã HĐ: {display_code}\nLưu tại: {pdf_path}"
+
+        return False, "Lỗi cập nhật Database!"
