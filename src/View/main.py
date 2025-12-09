@@ -5,12 +5,13 @@ from tkinter import messagebox
 # --- 1. IMPORT CÁC THÀNH PHẦN GIAO DIỆN CHUNG ---
 from sideBar import Sidebar
 
-# --- 2. IMPORT CÁC TRANG XÁC THỰC (LOGIN/REGISTER) ---
+# --- 2. IMPORT CÁC TRANG XÁC THỰC ---
 from dangNhap import LoginPage
 from dangKy import RegisterPage
 from quenMK import ForgotPasswordPage
 
-# --- 3. IMPORT CÁC TRANG CHỨC NĂNG (MODULES) ---
+# --- 3. IMPORT CÁC TRANG CHỨC NĂNG ---
+# (Giữ nguyên các import của bạn)
 from trangChu import MenuPage
 from khachHang import KhachHangPage
 from qlKho import KhoPage
@@ -23,6 +24,7 @@ from qlNhanVien import NhanVienPage
 from qlThongKe import ThongKePage
 from nganHang import NganHangPage
 from luong import LuongPage
+# [LƯU Ý] Đảm bảo import đúng file TaiKhoanPage mới mà chúng ta vừa sửa
 from taiKhoan import TaiKhoanPage
 
 # Cấu hình giao diện chung
@@ -65,10 +67,10 @@ class MainApp:
 
     def show_login(self):
         """Hiển thị màn hình Đăng nhập"""
-        self.clear_all_frames() # Xóa sạch giao diện cũ
+        self.clear_all_frames()
         self.current_auth_frame = LoginPage(
             self.root,
-            on_login_success=self.start_main_app,
+            on_login_success=self.start_main_app, # Callback khi đăng nhập thành công
             on_show_forgot_pass=self.show_forgot_password
         )
         self.current_auth_frame.pack(fill="both", expand=True)
@@ -85,22 +87,18 @@ class MainApp:
 
     def clear_all_frames(self):
         """Xóa sạch mọi thứ trên màn hình để chuyển trạng thái"""
-        # 1. Xóa trang nội dung (Menu, Kho...)
         if self.current_page:
             self.current_page.destroy()
             self.current_page = None
 
-        # 2. Xóa Sidebar
         if self.sidebar:
             self.sidebar.destroy()
             self.sidebar = None
 
-        # 3. Xóa Container chính
         if self.content_container:
             self.content_container.destroy()
             self.content_container = None
 
-        # 4. Xóa Frame Auth (Login/Register)
         if self.current_auth_frame:
             self.current_auth_frame.destroy()
             self.current_auth_frame = None
@@ -109,23 +107,26 @@ class MainApp:
     # PHẦN 2: ỨNG DỤNG CHÍNH
     # =========================================================================
 
-    def start_main_app(self, username):
-        """Khởi động giao diện chính sau khi login thành công"""
-        # Giả lập lấy ID (Thực tế bạn lấy từ kết quả login)
-        self.current_user_id = 1
-        print(f"Đăng nhập thành công: {username} (ID: {self.current_user_id})")
+    def start_main_app(self, username, user_id):
+        """
+        Khởi động giao diện chính sau khi login thành công.
+        QUAN TRỌNG: Hàm này phải nhận thêm tham số user_id từ LoginPage
+        """
+        # 1. Lưu ID người dùng thực tế từ Database
+        self.current_user_id = user_id
+        print(f"➤ Đăng nhập thành công: User={username} | ID={self.current_user_id}")
 
         self.clear_all_frames() # Xóa màn hình login
 
-        # 1. Tạo Sidebar bên trái
+        # 2. Tạo Sidebar
         self.sidebar = Sidebar(self.root, username=username, on_change_page_command=self.switch_page)
         self.sidebar.pack(side="left", fill="y")
 
-        # 2. Tạo Container chứa nội dung bên phải
+        # 3. Tạo Container nội dung
         self.content_container = ctk.CTkFrame(self.root, fg_color="white")
         self.content_container.pack(side="right", fill="both", expand=True)
 
-        # 3. Mặc định vào trang Menu
+        # 4. Vào trang Menu
         self.switch_page("menu")
         self.sidebar.handle_click("menu")
 
@@ -135,13 +136,11 @@ class MainApp:
         # --- XỬ LÝ ĐĂNG XUẤT ---
         if page_key == "logout":
             if messagebox.askyesno("Đăng xuất", "Bạn có chắc muốn đăng xuất?"):
-                # Reset thông tin người dùng
                 self.current_user_id = None
-                # Quay về màn hình đăng nhập
                 self.show_login()
             return
 
-        # 1. Xóa nội dung trang cũ
+        # 1. Xóa trang cũ
         if self.current_page:
             self.current_page.destroy()
             self.current_page = None
@@ -167,19 +166,24 @@ class MainApp:
         if page_key in pages_map:
             page_class = pages_map[page_key]
 
-            # Kiểm tra nếu là TaiKhoanPage thì truyền current_user_id
+            # [QUAN TRỌNG] Kiểm tra nếu là TaiKhoanPage thì truyền ID vào
             if page_key == "TaiKhoan":
+                # Truyền self.current_user_id (ID thật đã lưu khi login)
                 self.current_page = page_class(self.content_container, current_user_id=self.current_user_id)
             elif page_key == "menu":
                 self.current_page = page_class(self.content_container)
             else:
+                # Các trang khác chưa cần ID thì khởi tạo bình thường
+                # (Nếu sau này cần ID cho Hóa đơn/Điểm danh, bạn cũng truyền vào đây)
                 self.current_page = page_class(self.content_container)
 
             self.current_page.pack(fill="both", expand=True)
         else:
             print(f"⚠ Không tìm thấy module cho key: {page_key}")
-            self.current_page = ctk.CTkLabel(self.content_container, text=f"Trang {page_key} đang phát triển")
-            self.current_page.pack(expand=True)
+            # Trang 404
+            self.current_page = ctk.CTkFrame(self.content_container)
+            self.current_page.pack(fill="both", expand=True)
+            ctk.CTkLabel(self.current_page, text=f"Trang {page_key} đang phát triển", font=("Arial", 20)).pack(pady=50)
 
 
 if __name__ == "__main__":

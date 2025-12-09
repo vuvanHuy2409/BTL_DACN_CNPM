@@ -20,11 +20,11 @@ class TaiKhoanModel:
 
     def get_all(self):
         self.connect()
-        # [UPDATE] Đã bỏ hinhAnhUrl và vectorKhuonMat khỏi SELECT
+        # [UPDATE] Thêm tk.trangThai vào câu SELECT
         query = """
             SELECT 
                 nv.idNhanVien, nv.hoTen, nv.email, cv.tenChucVu,
-                tk.idTaiKhoan, tk.tenDangNhap, tk.matKhauHash
+                tk.idTaiKhoan, tk.tenDangNhap, tk.matKhauHash, tk.trangThai
             FROM nhanVien nv
             LEFT JOIN taiKhoanNhanVien tk ON nv.idTaiKhoan = tk.idTaiKhoan
             JOIN chucVu cv ON nv.idChucVu = cv.idChucVu

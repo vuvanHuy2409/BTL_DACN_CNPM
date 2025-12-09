@@ -1,135 +1,117 @@
 import customtkinter as ctk
 from tkinter import messagebox
+from src.Controller.QuenMKController import QuenMKController
 
 
 class ForgotPasswordPage(ctk.CTkFrame):
     def __init__(self, parent, on_back_command):
-        # 1. Kế thừa Frame
         super().__init__(parent, fg_color="white")
         self.on_back_command = on_back_command
+        self.controller = QuenMKController()
 
-        # 2. Tạo khung chứa nội dung ở giữa (Card Layout)
+        # Khung chính
         self.center_frame = ctk.CTkFrame(self, width=400, fg_color="#f5f5f5",
                                          corner_radius=15, border_width=1, border_color="#ddd")
         self.center_frame.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Mặc định hiển thị Bước 1: Xác thực thông tin
-        self.setup_step_1_ui()
+        # Bắt đầu ở bước 1
+        self.step_1_input_info()
 
-    # ================= BƯỚC 1: XÁC THỰC USERNAME & EMAIL =================
-    def setup_step_1_ui(self):
-        # Xóa các widget cũ (nếu có)
-        for widget in self.center_frame.winfo_children():
-            widget.destroy()
-
+    # ================= BƯỚC 1: NHẬP THÔNG TIN =================
+    def step_1_input_info(self):
+        self.clear_frame()
         ctk.CTkLabel(self.center_frame, text="QUÊN MẬT KHẨU", font=("Arial", 18, "bold"), text_color="#1a237e").pack(
-            pady=(30, 20))
+            pady=(30, 10))
+        ctk.CTkLabel(self.center_frame, text="Nhập tài khoản và email để nhận mã OTP", font=("Arial", 12)).pack(
+            pady=(0, 20))
 
-        # Input Tài khoản
         self.entry_user = self.create_entry("🧑", "Tài khoản")
-
-        # Input Email
         self.entry_email = self.create_entry("📧", "Email")
 
-        # Nút bấm
+        self.create_nav_buttons(self.xu_ly_gui_otp, "Gửi Mã OTP")
+
+    def xu_ly_gui_otp(self):
+        user = self.entry_user.get()
+        email = self.entry_email.get()
+        if not user or not email:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ!")
+            return
+
+        # Hiện loading (giả lập bằng cách đổi trỏ chuột)
+        self.configure(cursor="watch")
+        self.update()
+
+        success, msg = self.controller.gui_ma_xac_nhan(user, email)
+
+        self.configure(cursor="")
+        if success:
+            messagebox.showinfo("Đã gửi", msg)
+            self.step_2_verify_otp(email)  # Chuyển sang bước 2
+        else:
+            messagebox.showerror("Lỗi", msg)
+
+    # ================= BƯỚC 2: NHẬP MÃ OTP =================
+    def step_2_verify_otp(self, email):
+        self.clear_frame()
+        ctk.CTkLabel(self.center_frame, text="XÁC THỰC OTP", font=("Arial", 18, "bold"), text_color="#1a237e").pack(
+            pady=(30, 10))
+        ctk.CTkLabel(self.center_frame, text=f"Mã đã gửi đến: {email}", font=("Arial", 12)).pack(pady=(0, 20))
+
+        self.entry_otp = self.create_entry("🔑", "Nhập mã 6 số")
+
+        # Nút xác nhận
         btn_frame = ctk.CTkFrame(self.center_frame, fg_color="transparent")
-        btn_frame.pack(pady=(20, 30))
+        btn_frame.pack(pady=20)
+        ctk.CTkButton(btn_frame, text="Xác nhận", width=120, command=self.xu_ly_xac_thuc).pack(side="left", padx=5)
+        ctk.CTkButton(btn_frame, text="Gửi lại mã", width=100, fg_color="#FF9800", command=self.step_1_input_info).pack(
+            side="left", padx=5)
 
-        ctk.CTkButton(btn_frame, text="Tiếp tục", width=120, height=40,
-                      fg_color="#2196F3", hover_color="#1976D2", font=("Arial", 12, "bold"),
-                      command=self.xac_thuc_thong_tin).pack(side="left", padx=10)
+    def xu_ly_xac_thuc(self):
+        otp = self.entry_otp.get()
+        success, msg = self.controller.xac_thuc_otp(otp)
+        if success:
+            self.step_3_reset_pass()  # Chuyển sang bước 3
+        else:
+            messagebox.showerror("Sai mã", msg)
 
-        ctk.CTkButton(btn_frame, text="Quay lại", width=100, height=40,
-                      fg_color="#9E9E9E", hover_color="#757575", text_color="white", font=("Arial", 12, "bold"),
-                      command=self.on_back_command).pack(side="left", padx=10)
+    # ================= BƯỚC 3: ĐỔI MẬT KHẨU MỚI =================
+    def step_3_reset_pass(self):
+        self.clear_frame()
+        ctk.CTkLabel(self.center_frame, text="ĐẶT MẬT KHẨU MỚI", font=("Arial", 18, "bold"), text_color="#4CAF50").pack(
+            pady=(30, 20))
 
-    # ================= BƯỚC 2: ĐỔI MẬT KHẨU MỚI =================
-    def setup_step_2_ui(self):
-        # Xóa giao diện bước 1
+        self.entry_new = self.create_entry("🔒", "Mật khẩu mới", is_pass=True)
+        self.entry_confirm = self.create_entry("🔒", "Nhập lại mật khẩu", is_pass=True)
+
+        ctk.CTkButton(self.center_frame, text="Đổi Mật Khẩu", width=200, height=40, fg_color="#4CAF50",
+                      command=self.xu_ly_doi_mk).pack(pady=20)
+
+    def xu_ly_doi_mk(self):
+        new_p = self.entry_new.get()
+        conf_p = self.entry_confirm.get()
+        success, msg = self.controller.luu_mat_khau_moi(new_p, conf_p)
+        if success:
+            messagebox.showinfo("Thành công", msg)
+            self.on_back_command()  # Quay về đăng nhập
+        else:
+            messagebox.showerror("Lỗi", msg)
+
+    # ================= HELPERS =================
+    def clear_frame(self):
         for widget in self.center_frame.winfo_children():
             widget.destroy()
 
-        ctk.CTkLabel(self.center_frame, text="ĐẶT LẠI MẬT KHẨU", font=("Arial", 20, "bold"), text_color="#1a237e").pack(
-            pady=(30, 20))
-
-        ctk.CTkLabel(self.center_frame, text=f"Xin chào: {self.verified_user}", font=("Arial", 12),
-                     text_color="#333").pack(pady=(0, 10))
-
-        # Input Mật khẩu mới
-        self.entry_new_pass = self.create_entry("🔒", "Mật khẩu mới", is_pass=True)
-
-        # Input Xác nhận mật khẩu
-        self.entry_confirm_pass = self.create_entry("🔒", "Nhập lại mật khẩu", is_pass=True)
-
-        # Nút bấm
-        btn_frame = ctk.CTkFrame(self.center_frame, fg_color="transparent")
-        btn_frame.pack(pady=(20, 30))
-
-        ctk.CTkButton(btn_frame, text="Xác nhận", width=120, height=40,
-                      fg_color="#4CAF50", hover_color="#45a049", font=("Arial", 12, "bold"),
-                      command=self.luu_mat_khau_moi).pack(side="left", padx=10)
-
-        ctk.CTkButton(btn_frame, text="Hủy", width=100, height=40,
-                      fg_color="#9E9E9E", hover_color="#757575", text_color="white", font=("Arial", 12, "bold"),
-                      command=self.on_back_command).pack(side="left", padx=10)
-
-    # ================= HELPERS & LOGIC =================
     def create_entry(self, icon, placeholder, is_pass=False):
-        frame = ctk.CTkFrame(self.center_frame, fg_color="white", border_width=1, border_color="#ccc", corner_radius=8)
-        frame.pack(pady=8, padx=40, fill="x")
+        f = ctk.CTkFrame(self.center_frame, fg_color="white", border_width=1, border_color="#ccc")
+        f.pack(pady=8, padx=30, fill="x")
+        ctk.CTkLabel(f, text=icon, width=30).pack(side="left")
+        e = ctk.CTkEntry(f, placeholder_text=placeholder, border_width=0, height=35)
+        e.pack(side="left", fill="x", expand=True)
+        if is_pass: e.configure(show="*")
+        return e
 
-        ctk.CTkLabel(frame, text=icon, font=("Arial", 16), width=30).pack(side="left", padx=(5, 5))
-        entry = ctk.CTkEntry(frame, placeholder_text=placeholder, border_width=0, fg_color="white", height=35)
-        entry.pack(side="left", fill="x", expand=True)
-
-        if is_pass:
-            entry.configure(show="*")
-            btn_eye = ctk.CTkButton(frame, text="👁️", width=30, fg_color="transparent", hover_color="#eee",
-                                    text_color="#333",
-                                    command=lambda: self.toggle_pw(entry, btn_eye))
-            btn_eye.pack(side="right", padx=5)
-
-        return entry
-
-    def toggle_pw(self, entry, btn):
-        if entry.cget("show") == "*":
-            entry.configure(show="")
-            btn.configure(text="🙈")
-        else:
-            entry.configure(show="*")
-            btn.configure(text="👁️")
-
-    def xac_thuc_thong_tin(self):
-        user = self.entry_user.get().strip()
-        email = self.entry_email.get().strip()
-
-        if not user or not email:
-            messagebox.showwarning("Cảnh báo", "Vui lòng nhập đầy đủ thông tin!")
-            return
-
-        # --- LOGIC KIỂM TRA DB (Giả lập) ---
-        # if check_database(user, email):
-        if True:  # Giả sử đúng
-            self.verified_user = user
-            messagebox.showinfo("Thành công", "Thông tin chính xác. Vui lòng đặt lại mật khẩu.")
-            self.setup_step_2_ui()  # Chuyển sang giao diện đổi pass
-        else:
-            messagebox.showerror("Lỗi", "Tài khoản hoặc Email không đúng!")
-
-    def luu_mat_khau_moi(self):
-        new_pass = self.entry_new_pass.get()
-        confirm = self.entry_confirm_pass.get()
-
-        if not new_pass:
-            messagebox.showwarning("Cảnh báo", "Vui lòng nhập mật khẩu mới!")
-            return
-
-        if new_pass != confirm:
-            messagebox.showerror("Lỗi", "Mật khẩu xác nhận không khớp!")
-            return
-
-        # --- LOGIC LƯU DB ---
-        # update_password(self.verified_user, new_pass)
-
-        messagebox.showinfo("Thành công", "Đổi mật khẩu thành công!\nVui lòng đăng nhập lại.")
-        self.on_back_command()  # Quay về màn hình đăng nhập
+    def create_nav_buttons(self, next_cmd, next_text):
+        f = ctk.CTkFrame(self.center_frame, fg_color="transparent")
+        f.pack(pady=20)
+        ctk.CTkButton(f, text=next_text, width=120, command=next_cmd).pack(side="left", padx=5)
+        ctk.CTkButton(f, text="Hủy", width=80, fg_color="#999", command=self.on_back_command).pack(side="left", padx=5)
