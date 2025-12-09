@@ -38,8 +38,8 @@ class ThongKePage(ctk.CTkFrame):
         header = ctk.CTkFrame(container, fg_color="white")
         header.pack(fill="x", pady=(0, 20))
 
-        ctk.CTkLabel(header, text="BÁO CÁO THỐNG KÊ & DOANH THU",
-                     font=("Arial", 22, "bold"), text_color="#1565C0").pack(side="left")
+        ctk.CTkLabel(header, text="Báo Cáo Thống Kê & Doanh Thu",
+                     font=("Arial", 18, "bold"), text_color="black").pack(side="left")
 
         # Khung bộ lọc
         filter_frame = ctk.CTkFrame(header, fg_color="#F5F5F5", corner_radius=5)

@@ -19,7 +19,7 @@ class Sidebar(ctk.CTkFrame):
         header_frame.pack(fill="x", pady=(25, 15))
 
         # Welcome Text
-        ctk.CTkLabel(header_frame, text="WELCOME", font=("Arial", 20, "bold"), text_color="#1565C0").pack()
+        ctk.CTkLabel(header_frame, text="", font=("Arial", 20, "bold"), text_color="#1565C0").pack()
 
         # Avatar Frame (Tròn, nổi bật)
         avatar_container = ctk.CTkFrame(header_frame, fg_color="white", width=90, height=90, corner_radius=45, border_width=3, border_color="#BBDEFB")

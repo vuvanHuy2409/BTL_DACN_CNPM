@@ -25,8 +25,8 @@ class HoaDonPage(ctk.CTkFrame):
         container.pack(fill="both", expand=True, padx=20, pady=20)
 
         # Tiêu đề
-        ctk.CTkLabel(container, text="QUẢN LÝ HÓA ĐƠN ",
-                     font=("Arial", 24, "bold"), text_color="#333").pack(anchor="w", pady=(0, 20))
+        ctk.CTkLabel(container, text="Quản Lý Hoá Đơn",
+                     font=("Arial", 18, "bold"), text_color="#333").pack(anchor="w", pady=(0, 20))
 
         # === THANH CÔNG CỤ (TOOLBAR) ===
         toolbar_frame = ctk.CTkFrame(container, fg_color="#F9F9F9", corner_radius=8)

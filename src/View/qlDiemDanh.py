@@ -37,7 +37,7 @@ class DiemDanhPage(ctk.CTkFrame):
         left_frame = ctk.CTkFrame(self, fg_color="white")
         left_frame.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
 
-        ctk.CTkLabel(left_frame, text="DANH SÁCH NHÂN VIÊN", font=("Arial", 18, "bold"), text_color="#333").pack(
+        ctk.CTkLabel(left_frame, text="Quản Lý Điểm Danh", font=("Arial", 18, "bold"), text_color="#333").pack(
             anchor="w", pady=(0, 10))
 
         # --- Hàng Nút Chức Năng ---

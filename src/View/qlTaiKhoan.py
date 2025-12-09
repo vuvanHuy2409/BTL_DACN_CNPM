@@ -22,9 +22,9 @@ class QuanLyTKPage(ctk.CTkFrame):
 
         # === TIÊU ĐỀ ===
         ctk.CTkLabel(
-            container, text="QUẢN LÝ TÀI KHOẢN",
-            font=("Arial", 20, "bold"), text_color="#333"
-        ).pack(anchor="center", pady=(0, 20))
+            container, text="Quản Lý Tài Khoản",
+            font=("Arial", 18, "bold"), text_color="#333"
+        ).pack( pady=(0, 20))
 
         # ================= FORM =================
         input_group = ctk.CTkFrame(container, fg_color="#f5f5f5", border_width=1, border_color="#ccc")

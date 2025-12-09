@@ -28,7 +28,7 @@ class NhaCungCapPage(ctk.CTkFrame):
         container.pack(fill="both", expand=True, padx=20, pady=20)
 
         # Tiêu đề
-        ctk.CTkLabel(container, text="QUẢN LÝ NHÀ CUNG CẤP", font=("Arial", 20, "bold"), text_color="#333").pack(
+        ctk.CTkLabel(container, text="Quản Lý Nhà Cung Cấp", font=("Arial", 18, "bold"), text_color="#333").pack(
             anchor="w", pady=(0, 20))
 
         # --- 1. THANH CÔNG CỤ (BUTTONS & SEARCH) ---

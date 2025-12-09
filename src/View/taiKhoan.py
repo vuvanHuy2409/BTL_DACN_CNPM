@@ -33,15 +33,15 @@ class TaiKhoanPage(ctk.CTkFrame):
         # ================= 1. TIÊU ĐỀ =================
         title_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=0)
         title_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(title_frame, text="QUẢN LÝ HỒ SƠ CÁ NHÂN",
-                     font=("Arial", 20, "bold"), text_color="#1565C0").pack(pady=15)
+        ctk.CTkLabel(title_frame, text="Quản Lý Hồ Sơ Cá Nhân",
+                     font=("Arial", 18, "bold"), text_color="#000000").pack(pady=15)
 
         # ================= 2. KHUNG THÔNG TIN CÁ NHÂN =================
         self.info_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=10)
         self.info_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=10)
 
         # Header Section
-        ctk.CTkLabel(self.info_frame, text="THÔNG TIN NHÂN VIÊN",
+        ctk.CTkLabel(self.info_frame, text="Thông Tin Nhân Viên",
                      font=("Arial", 14, "bold"), text_color="#333").pack(anchor="w", padx=20, pady=10)
         ctk.CTkFrame(self.info_frame, height=2, fg_color="#E0E0E0").pack(fill="x", padx=20, pady=(0, 10))
 
@@ -75,7 +75,7 @@ class TaiKhoanPage(ctk.CTkFrame):
         pass_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=10)
         pass_frame.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)
 
-        ctk.CTkLabel(pass_frame, text="BẢO MẬT & ĐỔI MẬT KHẨU",
+        ctk.CTkLabel(pass_frame, text="Bảo Mật & Đổi Mật Khẩu",
                      font=("Arial", 14, "bold"), text_color="#333").pack(anchor="w", padx=20, pady=10)
         ctk.CTkFrame(pass_frame, height=2, fg_color="#E0E0E0").pack(fill="x", padx=20, pady=(0, 10))
 

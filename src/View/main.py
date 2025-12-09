@@ -23,7 +23,7 @@ from qlNhanVien import NhanVienPage
 from qlThongKe import ThongKePage
 from nganHang import NganHangPage
 from luong import LuongPage
-from taiKhoan import TaiKhoanPage  # Trang cá nhân vừa sửa
+from taiKhoan import TaiKhoanPage
 
 # Cấu hình giao diện chung
 ctk.set_appearance_mode("light")
@@ -51,8 +51,7 @@ class MainApp:
         self.current_page = None
 
         # [QUAN TRỌNG] Biến lưu ID người dùng đang đăng nhập
-        # Mặc định là 1 (Admin) để test, thực tế sẽ lấy từ Database khi Login thành công
-        self.current_user_id = 1
+        self.current_user_id = None
 
         # Bắt đầu ứng dụng bằng màn hình Đăng nhập
         self.show_login()
@@ -66,11 +65,10 @@ class MainApp:
 
     def show_login(self):
         """Hiển thị màn hình Đăng nhập"""
-        self.clear_all_frames()
+        self.clear_all_frames() # Xóa sạch giao diện cũ
         self.current_auth_frame = LoginPage(
             self.root,
             on_login_success=self.start_main_app,
-            on_show_register=self.show_register,
             on_show_forgot_pass=self.show_forgot_password
         )
         self.current_auth_frame.pack(fill="both", expand=True)
@@ -86,24 +84,38 @@ class MainApp:
         self.current_auth_frame.pack(fill="both", expand=True)
 
     def clear_all_frames(self):
-        if self.current_auth_frame:
-            self.current_auth_frame.destroy()
-            self.current_auth_frame = None
+        """Xóa sạch mọi thứ trên màn hình để chuyển trạng thái"""
+        # 1. Xóa trang nội dung (Menu, Kho...)
+        if self.current_page:
+            self.current_page.destroy()
+            self.current_page = None
 
+        # 2. Xóa Sidebar
         if self.sidebar:
             self.sidebar.destroy()
             self.sidebar = None
 
+        # 3. Xóa Container chính
         if self.content_container:
             self.content_container.destroy()
             self.content_container = None
+
+        # 4. Xóa Frame Auth (Login/Register)
+        if self.current_auth_frame:
+            self.current_auth_frame.destroy()
+            self.current_auth_frame = None
 
     # =========================================================================
     # PHẦN 2: ỨNG DỤNG CHÍNH
     # =========================================================================
 
     def start_main_app(self, username):
-        self.clear_all_frames()
+        """Khởi động giao diện chính sau khi login thành công"""
+        # Giả lập lấy ID (Thực tế bạn lấy từ kết quả login)
+        self.current_user_id = 1
+        print(f"Đăng nhập thành công: {username} (ID: {self.current_user_id})")
+
+        self.clear_all_frames() # Xóa màn hình login
 
         # 1. Tạo Sidebar bên trái
         self.sidebar = Sidebar(self.root, username=username, on_change_page_command=self.switch_page)
@@ -120,9 +132,12 @@ class MainApp:
     def switch_page(self, page_key):
         """Điều hướng giữa các module"""
 
-        # Xử lý đăng xuất
+        # --- XỬ LÝ ĐĂNG XUẤT ---
         if page_key == "logout":
             if messagebox.askyesno("Đăng xuất", "Bạn có chắc muốn đăng xuất?"):
+                # Reset thông tin người dùng
+                self.current_user_id = None
+                # Quay về màn hình đăng nhập
                 self.show_login()
             return
 
@@ -152,16 +167,12 @@ class MainApp:
         if page_key in pages_map:
             page_class = pages_map[page_key]
 
-            # [SỬA LỖI TẠI ĐÂY] Kiểm tra nếu là TaiKhoanPage thì truyền current_user_id
+            # Kiểm tra nếu là TaiKhoanPage thì truyền current_user_id
             if page_key == "TaiKhoan":
                 self.current_page = page_class(self.content_container, current_user_id=self.current_user_id)
             elif page_key == "menu":
-                # Nếu MenuPage cũng cần user_id để thêm đơn hàng (như các bước trước)
-                # Bạn có thể truyền vào nếu MenuPage đã update __init__
-                # self.current_page = page_class(self.content_container, current_user_id=self.current_user_id)
                 self.current_page = page_class(self.content_container)
             else:
-                # Các trang khác khởi tạo bình thường
                 self.current_page = page_class(self.content_container)
 
             self.current_page.pack(fill="both", expand=True)

@@ -30,7 +30,7 @@ class SanPhamPage(ctk.CTkFrame):
         container.pack(fill="both", expand=True, padx=20, pady=20)
 
         # Tiêu đề
-        ctk.CTkLabel(container, text="QUẢN LÝ SẢN PHẨM", font=("Arial", 20, "bold"), text_color="#333").pack(anchor="w",
+        ctk.CTkLabel(container, text="Quản Lý Sản Phẩm", font=("Arial", 18, "bold"), text_color="#333").pack(anchor="w",
                                                                                                              pady=(
                                                                                                              0, 20))
 

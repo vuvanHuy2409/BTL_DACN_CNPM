@@ -22,7 +22,7 @@ class ForgotPasswordPage(ctk.CTkFrame):
         for widget in self.center_frame.winfo_children():
             widget.destroy()
 
-        ctk.CTkLabel(self.center_frame, text="QUÊN MẬT KHẨU", font=("Arial", 20, "bold"), text_color="#1a237e").pack(
+        ctk.CTkLabel(self.center_frame, text="QUÊN MẬT KHẨU", font=("Arial", 18, "bold"), text_color="#1a237e").pack(
             pady=(30, 20))
 
         # Input Tài khoản

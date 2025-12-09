@@ -26,8 +26,8 @@ class LuongPage(ctk.CTkFrame):
         header = ctk.CTkFrame(container, fg_color="white")
         header.pack(fill="x", pady=(0, 15))
 
-        ctk.CTkLabel(header, text="QUẢN LÝ LƯƠNG NHÂN VIÊN",
-                     font=("Arial", 20, "bold"), text_color="#333").pack(side="left")
+        ctk.CTkLabel(header, text="Quản Lý Lương Nhân Viên",
+                     font=("Arial", 18, "bold"), text_color="#333").pack(side="left")
 
         # Combobox Chọn Tháng
         now = datetime.now()
