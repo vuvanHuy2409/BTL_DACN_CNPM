@@ -320,3 +320,16 @@ class TrangChuModel:
             return self.cursor.fetchone()
         finally:
             self.close()
+
+    def reset_loyalty_points(self, id_kh):
+        """Reset điểm tích lũy về 0 khi khách dùng để giảm giá"""
+        self.connect()
+        try:
+            self.cursor.execute("UPDATE khachHang SET diemTichLuy = 0 WHERE idKhachHang = %s", (id_kh,))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Lỗi reset điểm: {e}")
+            return False
+        finally:
+            self.close()

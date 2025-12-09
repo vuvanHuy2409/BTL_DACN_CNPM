@@ -9,7 +9,7 @@ from src.Controller.DangNhapController import DangNhapController
 class LoginPage(ctk.CTkFrame):
     def __init__(self, parent, on_login_success, on_show_forgot_pass):
         """
-        on_login_success: Hàm callback nhận 2 tham số (username, user_id)
+        on_login_success: Hàm callback nhận 3 tham số (username, user_id, role_name)
         """
         super().__init__(parent, fg_color="white")
 
@@ -108,23 +108,32 @@ class LoginPage(ctk.CTkFrame):
             self.password_entry.configure(show="*")
             if self.icon_eye_open: self.eye_button.configure(image=self.icon_eye_open)
 
+    # --- [PHẦN SỬA ĐỔI QUAN TRỌNG] ---
     def xu_ly_dang_nhap(self):
-        username = self.username_entry.get().strip()
-        password = self.password_entry.get().strip()
+        username_input = self.username_entry.get().strip()
+        password_input = self.password_entry.get().strip()
 
-        if not username or not password:
+        if not username_input or not password_input:
             messagebox.showwarning("Cảnh báo", "Vui lòng nhập đầy đủ thông tin!")
             return
 
         # Gọi Controller kiểm tra
-        ket_qua = self.controller.xu_ly_dang_nhap(username, password)
+        # Controller trả về: { "status": True, "data": { "id_nhan_vien": 1, "ho_ten": "A", "role_name": "QuanLy" } }
+        ket_qua = self.controller.xu_ly_dang_nhap(username_input, password_input)
 
         if ket_qua["status"]:
-            # [QUAN TRỌNG] Lấy ID nhân viên từ kết quả trả về
-            user_id = ket_qua.get("id_nhan_vien")
+            # Lấy data từ kết quả trả về
+            data = ket_qua.get("data", {})
 
-            # Truyền cả username và user_id vào MainApp
+            user_id = data.get("id_nhan_vien")
+            full_name = data.get("ho_ten")  # Lấy tên thật từ DB (ví dụ: "Nguyễn Văn A")
+            role_name = data.get("role_name")  # [QUAN TRỌNG] Lấy chức vụ để phân quyền
+
+            # Truyền đủ 3 tham số vào MainApp
             if self.on_login_success:
-                self.on_login_success(username, user_id)
+                # Tham số 1: Tên hiển thị trên Sidebar
+                # Tham số 2: ID để xử lý logic
+                # Tham số 3: Role để check quyền
+                self.on_login_success(full_name, user_id, role_name)
         else:
             messagebox.showerror("Lỗi đăng nhập", ket_qua["message"])

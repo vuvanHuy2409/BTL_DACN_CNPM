@@ -2,7 +2,6 @@ import mysql.connector
 import hashlib
 from src.config.db_config import DB_CONFIG
 
-
 class DangNhapController:
     def __init__(self):
         pass
@@ -15,16 +14,21 @@ class DangNhapController:
             conn = mysql.connector.connect(**DB_CONFIG)
             cursor = conn.cursor(dictionary=True)
 
-            # Hash mật khẩu nhập vào để so sánh
             pass_hash = self.hash_password(password)
 
-            # [QUAN TRỌNG] Phải SELECT idNhanVien từ bảng nhanVien thông qua bảng taiKhoanNhanVien
-            # Giả sử cấu trúc DB: taiKhoanNhanVien(idTaiKhoan, ...) và nhanVien(idNhanVien, idTaiKhoan, ...)
+            # [THAY ĐỔI QUAN TRỌNG]
+            # Lấy trực tiếp cột 'phanQuyen' từ bảng 'nhanVien'
+            # Không cần JOIN bảng chucVu để lấy quyền nữa
             query = """
-                SELECT nv.idNhanVien 
+                SELECT 
+                    nv.idNhanVien, 
+                    nv.hoTen, 
+                    nv.phanQuyen  
                 FROM taiKhoanNhanVien tk
                 JOIN nhanVien nv ON tk.idTaiKhoan = nv.idTaiKhoan
-                WHERE tk.tenDangNhap = %s AND tk.matKhauHash = %s AND tk.trangThai = 1
+                WHERE tk.tenDangNhap = %s 
+                  AND tk.matKhauHash = %s 
+                  AND nv.trangThaiLamViec = 'DangLamViec'
             """
 
             cursor.execute(query, (username, pass_hash))
@@ -34,11 +38,16 @@ class DangNhapController:
             conn.close()
 
             if result:
-                # Đăng nhập thành công -> Trả về ID
+                # Trả về kết quả
                 return {
                     "status": True,
                     "message": "Đăng nhập thành công",
-                    "id_nhan_vien": result['idNhanVien']  # <--- Trả về ID ở đây
+                    "data": {
+                        "id_nhan_vien": result['idNhanVien'],
+                        "ho_ten": result['hoTen'],
+                        # Lấy giá trị từ cột phanQuyen ('admin' hoặc 'nhanVien')
+                        "role_name": result['phanQuyen']
+                    }
                 }
             else:
                 return {
