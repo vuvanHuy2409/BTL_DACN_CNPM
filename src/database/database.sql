@@ -942,17 +942,16 @@ CREATE TABLE `nhaCungCap` (
 --
 
 INSERT INTO `nhaCungCap` (`idNhaCungCap`, `tenNhaCungCap`, `soDienThoai`, `diaChi`, `ngayCapNhat`, `isActive`) VALUES
-(1, 'Trung Nguyên Legend', '0283111222', 'Cung cấp Cà phê hạt, bột', NULL, 1),
-(2, 'Vinamilk Pro', '1900123456', 'Cung cấp Sữa tươi, Sữa đặc, Sữa chua', NULL, 1),
-(3, 'Nguyên Liệu Pha Chế Việt', '0901234567', 'Cung cấp Syrup, Bột kem, Trà', NULL, 1),
-(4, 'Nông Sản Sạch Đà Lạt', '0633888999', 'Cung cấp Trái cây tươi (Bơ, Dâu, Cam)', NULL, 1),
-(5, 'Bao Bì Xanh', '0289999888', 'Cung cấp Ly, Ống hút, Túi đựng', NULL, 1),
-(6, 'Siêu Thị Metro', '0283777888', 'Cung cấp đường, sữa, đá bi sỉ lẻ', NULL, 1),
-(7, 'Vườn Dâu Đà Lạt', '0633111222', 'Cung cấp Dâu tây, Bạc hà tươi', NULL, 1),
-(8, 'Công Ty Hương Liệu Á Châu', '0905123123', 'Cung cấp Syrup Monin, Torani', NULL, 1),
-(9, 'Trại Bò Sữa Long Thành', '0251355566', 'Cung cấp Sữa tươi thanh trùng giá sỉ', NULL, 1),
-(10, 'Xưởng Bánh Ngọt Bakery', '0988777666', 'Cung cấp bánh ăn kèm cafe', NULL, 1);
-
+(1, 'Trung Nguyên Legend', '0283925777', '82-84 Bùi Thị Xuân, P. Bến Thành, Q.1, TP.HCM', NULL, 1),
+(2, 'Vinamilk Pro', '1900636979', '10 Tân Trào, P. Tân Phú, Q.7, TP.HCM', NULL, 1),
+(3, 'Nguyên Liệu Pha Chế Việt', '0901234567', '350/12 Huỳnh Tấn Phát, P. Bình Thuận, Q.7, TP.HCM', NULL, 1),
+(4, 'Nông Sản Sạch Đà Lạt', '0633888999', 'Số 15, Đường Mai Anh Đào, P.8, TP. Đà Lạt, Lâm Đồng', NULL, 1),
+(5, 'Bao Bì Xanh', '0289999888', '172 Bình Long, P. Phú Thạnh, Q. Tân Phú, TP.HCM', NULL, 1),
+(6, 'Siêu Thị Metro (MM Mega)', '0283740666', 'Khu B, KĐT An Phú - An Khánh, Q.2, TP.Thủ Đức', NULL, 1),
+(7, 'Vườn Dâu Đà Lạt', '0633111222', '144B Vòng Lâm Viên, P.8, TP. Đà Lạt, Lâm Đồng', NULL, 1),
+(8, 'Công Ty Hương Liệu Á Châu', '0905123123', 'Lô E, KCN Tân Tạo, Q. Bình Tân, TP.HCM', NULL, 1),
+(9, 'Trại Bò Sữa Long Thành', '0251355566', 'Km 14, Quốc lộ 51, Tam Phước, Biên Hòa, Đồng Nai', NULL, 1),
+(10, 'Xưởng Bánh Ngọt Bakery', '0988777666', '202 Phạm Văn Hai, P.5, Q. Tân Bình, TP.HCM', NULL, 1);
 -- --------------------------------------------------------
 
 --
