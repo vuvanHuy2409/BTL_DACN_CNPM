@@ -19,4 +19,8 @@
     ```Bash
   
     git push origin main
+* Bước 4: cài thư viện
+    ```Bash
+  
+    pip install -r requirements.txt
 ---

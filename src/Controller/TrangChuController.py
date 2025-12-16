@@ -19,11 +19,15 @@ class TrangChuController:
             os.makedirs(self.invoice_dir)
 
     # ================= 1. UTILS =================
+
     def remove_accents(self, input_str):
         if not input_str: return ""
-        nfkd = unicodedata.normalize('NFKD', str(input_str))
-        return "".join([c for c in nfkd if not unicodedata.combining(c)])
+        # 1. Xử lý thủ công chữ Đ/đ (Vì thư viện chuẩn không xử lý cái này)
+        s = input_str.replace("Đ", "D").replace("đ", "d")
 
+        # 2. Xử lý các dấu còn lại
+        nfkd = unicodedata.normalize('NFKD', str(s))
+        return "".join([c for c in nfkd if not unicodedata.combining(c)])
     def format_money(self, value):
         return "{:,.0f}".format(value)
 
