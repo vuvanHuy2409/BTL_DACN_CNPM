@@ -30,7 +30,8 @@ class DiemDanhController:
 
     def remove_accents(self, input_str):
         if not input_str: return ""
-        nfkd = unicodedata.normalize('NFKD', input_str)
+        s = input_str.replace("Đ", "D").replace("đ", "d")
+        nfkd = unicodedata.normalize('NFKD', s)
         return "".join([c for c in nfkd if not unicodedata.combining(c)])
 
     def get_list_nv_sorted(self):
