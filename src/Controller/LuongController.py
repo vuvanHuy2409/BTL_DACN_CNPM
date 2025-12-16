@@ -11,141 +11,195 @@ class LuongController:
     def __init__(self):
         self.model = LuongModel()
 
-    # [ĐÃ SỬA TÊN HÀM] Từ get_bang_luong -> get_list_salary
-    def get_list_salary(self, month_year):
+    def _parse_month_year(self, month_str):
         """
-        Lấy danh sách lương theo tháng.
-        Input: 'Tháng 12/2025'
+        Hàm phụ trợ: Chuyển chuỗi 'Tháng 12/2025' thành (12, 2025)
         """
         try:
-            parts = month_year.split('/')
-            month = int(parts[0].replace("Tháng ", ""))
-            year = int(parts[1])
-            return self.model.get_bang_luong_thang(month, year)
-        except Exception as e:
-            print(f"Lỗi parse tháng: {e}")
+            # Chuỗi vào: "Tháng 12/2025"
+            parts = month_str.split('/')
+            month = int(parts[0].replace("Tháng ", "").strip())
+            year = int(parts[1].strip())
+            return month, year
+        except Exception:
+            return None, None
+
+    def get_list_salary(self, month_year_str):
+        """
+        Lấy danh sách lương để hiển thị lên bảng.
+        Logic: Gọi Model để đồng bộ snapshot trước, sau đó lấy dữ liệu về.
+        """
+        month, year = self._parse_month_year(month_year_str)
+        if not month or not year:
+            print("Lỗi định dạng tháng năm!")
             return []
 
-    def thanh_toan_luong(self, idNV, month_str):
+        # Gọi Model lấy dữ liệu
+        return self.model.get_bang_luong_thang(month, year)
+
+    def thanh_toan_luong(self, idNV, month_year_str):
+        """
+        Xử lý sự kiện nút 'Thanh Toán'.
+        """
         if not idNV:
-            return False, "Vui lòng chọn nhân viên!"
+            return False, "Vui lòng chọn nhân viên cần thanh toán!"
 
-        try:
-            parts = month_str.split('/')
-            month = int(parts[0].replace("Tháng ", ""))
-            year = int(parts[1])
-
-            if self.model.update_payment_status(idNV, month, year):
-                return True, "Đã xác nhận thanh toán lương!"
-            else:
-                return False, "Không có dữ liệu cần thanh toán hoặc lỗi hệ thống."
-        except:
+        month, year = self._parse_month_year(month_year_str)
+        if not month:
             return False, "Lỗi định dạng tháng!"
 
-    # ================= XUẤT EXCEL =================
-    def export_excel(self, month_year, save_path):
-        # [CẬP NHẬT] Gọi đúng tên hàm mới get_list_salary
-        data = self.get_list_salary(month_year)
+        # Gọi Model update trạng thái
+        success = self.model.update_payment_status(idNV, month, year)
 
-        if not data: return False, "Không có dữ liệu để xuất!"
+        if success:
+            return True, f"Đã cập nhật trạng thái 'Đã Thanh Toán' cho nhân viên ID {idNV}!"
+        else:
+            return False, "Không thể cập nhật (Có thể đã thanh toán rồi hoặc lỗi DB)."
+
+    # ================= XUẤT EXCEL =================
+    def export_excel(self, month_year_str, save_path):
+        data = self.get_list_salary(month_year_str)
+
+        if not data:
+            return False, "Không có dữ liệu để xuất!"
 
         try:
-            # Chuẩn bị dữ liệu
             export_list = []
             total_money = 0
 
+            # 1. Chuẩn bị dữ liệu cho DataFrame
             for row in data:
-                thuc_lanh = float(row['thucLanh'])
+                # Xử lý các giá trị None hoặc Decimal từ SQL
+                thuc_lanh = float(row['thucLanh']) if row['thucLanh'] else 0
+                luong_snapshot = float(row['luongCoBanSnapshot']) if row['luongCoBanSnapshot'] else 0
+                tong_gio = float(row['tongGioLamThang']) if row['tongGioLamThang'] else 0
+
                 total_money += thuc_lanh
+
+                # Map tên cột tiếng Việt
                 export_list.append({
                     "Mã NV": row['idNhanVien'],
                     "Họ Tên": row['hoTen'],
                     "Chức Vụ": row['tenChucVu'],
-                    "Lương Cơ Bản": float(row['luongCoBan']),
-                    "Tổng Giờ Làm": float(row['tongGioLamThang']),
+                    "Lương Cơ Bản (Lưu)": luong_snapshot,
+                    "Tổng Giờ Làm": tong_gio,
                     "Thực Lãnh": thuc_lanh,
                     "Trạng Thái": "Đã thanh toán" if row['trangThai'] == 'DaThanhToan' else "Chưa thanh toán"
                 })
 
-            # Dòng tổng
+            # 2. Thêm dòng Tổng cộng ở cuối
             export_list.append({
                 "Mã NV": "", "Họ Tên": "TỔNG CỘNG", "Chức Vụ": "",
-                "Lương Cơ Bản": "", "Tổng Giờ Làm": "",
+                "Lương Cơ Bản (Lưu)": "", "Tổng Giờ Làm": "",
                 "Thực Lãnh": total_money, "Trạng Thái": ""
             })
 
-            # Xuất file
+            # 3. Tạo DataFrame và lưu
             df = pd.DataFrame(export_list)
-            if not save_path.endswith(".xlsx"): save_path += ".xlsx"
+
+            # Đảm bảo đuôi file
+            if not save_path.endswith(".xlsx"):
+                save_path += ".xlsx"
+
             df.to_excel(save_path, index=False)
 
-            return True, f"Đã xuất Excel: {save_path}"
+            return True, f"Đã xuất file thành công tại:\n{save_path}"
         except Exception as e:
             return False, f"Lỗi xuất Excel: {e}"
 
     # ================= XUẤT PDF =================
-    def export_pdf(self, month_year, save_path):
-        # [CẬP NHẬT] Gọi đúng tên hàm mới get_list_salary
-        data = self.get_list_salary(month_year)
+    def export_pdf(self, month_year_str, save_path):
+        data = self.get_list_salary(month_year_str)
 
-        if not data: return False, "Không có dữ liệu!"
+        if not data:
+            return False, "Không có dữ liệu!"
 
         try:
-            if not save_path.endswith(".pdf"): save_path += ".pdf"
+            if not save_path.endswith(".pdf"):
+                save_path += ".pdf"
 
             c = canvas.Canvas(save_path, pagesize=A4)
             width, height = A4
 
+            # --- Cấu hình Font chữ (Hỗ trợ tiếng Việt) ---
+            # Lưu ý: Cần trỏ đúng đường dẫn font trên máy tính của bạn
+            font_name = "Helvetica"  # Mặc định nếu không tìm thấy font Việt
             try:
+                # Đường dẫn font phổ biến trên Windows
                 font_path = "C:/Windows/Fonts/arial.ttf"
                 if os.path.exists(font_path):
                     pdfmetrics.registerFont(TTFont('Arial', font_path))
-                    c.setFont("Arial", 12)
-                else:
-                    c.setFont("Helvetica", 12)
+                    font_name = "Arial"
             except:
-                c.setFont("Helvetica", 12)
+                pass  # Dùng font mặc định nếu lỗi
 
+            c.setFont(font_name, 14)
+
+            # --- Vẽ Tiêu Đề ---
             y = height - 50
+            c.drawCentredString(width / 2, y, f"BẢNG LƯƠNG NHÂN VIÊN - {month_year_str.upper()}")
 
-            # Header
-            c.drawString(200, y, f"BANG LUONG - {month_year.upper()}")
-            y -= 40
+            y -= 30
+            c.setFont(font_name, 10)
+            c.drawString(30, y, f"Ngày xuất: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}")
 
-            headers = ["ID", "HO TEN", "CHUC VU", "GIO", "THUC LANH"]
-            x_positions = [30, 80, 250, 380, 450]
+            # --- Vẽ Header Bảng ---
+            y -= 30
+            c.setFont(font_name, 10)
+            # Tọa độ X cho các cột
+            x_pos = {
+                "id": 30, "ten": 70, "chucvu": 220,
+                "luong_luu": 320, "gio": 400, "thuc_lanh": 460
+            }
 
-            for i, h in enumerate(headers):
-                c.drawString(x_positions[i], y, h)
+            c.drawString(x_pos["id"], y, "ID")
+            c.drawString(x_pos["ten"], y, "HỌ TÊN")
+            c.drawString(x_pos["chucvu"], y, "CHỨC VỤ")
+            c.drawString(x_pos["luong_luu"], y, "LƯƠNG GỐC")
+            c.drawString(x_pos["gio"], y, "GIỜ")
+            c.drawString(x_pos["thuc_lanh"], y, "THỰC LÃNH")
 
+            # Kẻ đường gạch dưới header
             y -= 10
-            c.line(30, y, 550, y)
+            c.line(30, y, 560, y)
             y -= 20
 
-            # Data
+            # --- Vẽ Dữ Liệu ---
             total_money = 0
+
             for row in data:
-                thuc_lanh = float(row['thucLanh'])
+                thuc_lanh = float(row['thucLanh']) if row['thucLanh'] else 0
+                luong_snapshot = float(row['luongCoBanSnapshot']) if row['luongCoBanSnapshot'] else 0
+                tong_gio = float(row['tongGioLamThang']) if row['tongGioLamThang'] else 0
+
                 total_money += thuc_lanh
 
-                c.drawString(x_positions[0], y, str(row['idNhanVien']))
-                c.drawString(x_positions[1], y, str(row['hoTen']))  # Cẩn thận tiếng Việt nếu dùng Helvetica
-                c.drawString(x_positions[2], y, str(row['tenChucVu']))
-                c.drawString(x_positions[3], y, str(row['tongGioLamThang']))
-                c.drawString(x_positions[4], y, "{:,.0f}".format(thuc_lanh))
+                c.drawString(x_pos["id"], y, str(row['idNhanVien']))
+                c.drawString(x_pos["ten"], y, str(row['hoTen']))
+                c.drawString(x_pos["chucvu"], y, str(row['tenChucVu']))
+
+                # Format số tiền
+                c.drawString(x_pos["luong_luu"], y, "{:,.0f}".format(luong_snapshot))
+                c.drawString(x_pos["gio"], y, "{:,.2f}".format(tong_gio))
+                c.drawString(x_pos["thuc_lanh"], y, "{:,.0f}".format(thuc_lanh))
 
                 y -= 20
+
+                # Nếu hết trang thì tạo trang mới
                 if y < 50:
                     c.showPage()
+                    c.setFont(font_name, 10)
                     y = height - 50
 
-            c.line(30, y, 550, y)
-            y -= 20
-            c.drawString(300, y, "TONG CONG:")
-            c.drawString(450, y, "{:,.0f}".format(total_money))
+            # --- Vẽ Tổng Kết ---
+            c.line(30, y + 10, 560, y + 10)
+            y -= 10
+            c.setFont(font_name, 12)
+            c.drawString(320, y, "TỔNG CỘNG:")
+            c.drawString(460, y, "{:,.0f} VNĐ".format(total_money))
 
             c.save()
-            return True, f"Đã xuất PDF: {save_path}"
+            return True, f"Đã xuất PDF thành công tại:\n{save_path}"
 
         except Exception as e:
             return False, f"Lỗi xuất PDF: {e}"

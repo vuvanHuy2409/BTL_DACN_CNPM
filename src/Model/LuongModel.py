@@ -18,61 +18,89 @@ class LuongModel:
         if self.cursor: self.cursor.close()
         if self.conn: self.conn.close()
 
-    def get_bang_luong_thang(self, month, year):
+    def sync_monthly_salary(self, month, year):
         """
-        Lấy bảng lương tổng hợp.
-        [FIXED] Đã thêm logic tính cột 'trangThai'
+        [LOGIC MỚI] Tự động tạo dữ liệu lương cho tháng.
+        - Tìm các ca làm việc trong bangChamCong chưa có trong bang Luong.
+        - INSERT vào bang Luong, lấy luongCoBan HIỆN TẠI lưu vào luongNV (Snapshot).
         """
         self.connect()
+        try:
+            # Câu lệnh này chỉ thêm những ca chưa được tính lương
+            # luongNV = Lương cơ bản hiện tại (Lưu cứng)
+            # tongLuong = (Lương cơ bản / 26 / 8) * số giờ làm
+            sql_sync = """
+                INSERT INTO luong (idNhanVien, idChamCong, luongNV, soGioCong, tongLuong, ttThanhToan)
+                SELECT 
+                    b.idNhanVien,
+                    b.idChamCong,
+                    cv.luongCoBan, 
+                    b.tongGioLam,
+                    ROUND((cv.luongCoBan / 26 / 8) * b.tongGioLam, 0),
+                    'ChuaThanhToan'
+                FROM bangChamCong b
+                JOIN nhanVien nv ON b.idNhanVien = nv.idNhanVien
+                JOIN chucVu cv ON nv.idChucVu = cv.idChucVu
+                WHERE MONTH(b.gioVao) = %s AND YEAR(b.gioVao) = %s
+                AND b.idChamCong NOT IN (SELECT idChamCong FROM luong)
+            """
+            self.cursor.execute(sql_sync, (month, year))
+            self.conn.commit()
+        except Exception as e:
+            print(f"Lỗi đồng bộ lương: {e}")
+        finally:
+            self.close()
+
+    def get_bang_luong_thang(self, month, year):
+        """
+        Lấy dữ liệu TỪ BẢNG LUONG (đã lưu snapshot) để hiển thị.
+        """
+        self.connect()
+        # Bước 1: Đồng bộ dữ liệu mới nhất trước
+        # (Để đảm bảo nếu vừa có chấm công mới thì lương sẽ cập nhật ngay)
+        self.close()  # Đóng để sync mở kết nối mới
+        self.sync_monthly_salary(month, year)
+
+        self.connect()  # Mở lại để select
         query = """
             SELECT 
-                nv.idNhanVien, 
+                l.idNhanVien, 
                 nv.hoTen, 
                 cv.tenChucVu,
-                cv.luongCoBan,
 
-                -- Tổng giờ làm trong tháng
-                COALESCE(SUM(b.tongGioLam), 0) as tongGioLamThang,
+                -- Lấy mức lương cơ bản đã lưu trong bảng lương (Trung bình hoặc Max đều được vì trong 1 tháng thường không đổi)
+                MAX(l.luongNV) as luongCoBanSnapshot,
 
-                -- Tính lương thực lãnh
-                ROUND((cv.luongCoBan / 26 / 8) * COALESCE(SUM(b.tongGioLam), 0)) as thucLanh,
+                -- Tổng hợp từ chi tiết lương
+                SUM(l.soGioCong) as tongGioLamThang,
+                SUM(l.tongLuong) as thucLanh,
 
-                -- [QUAN TRỌNG] Logic xác định trạng thái:
-                -- Nếu có bất kỳ dòng lương nào trong tháng là 'ChuaThanhToan' -> Trạng thái chung là Chưa TT
+                -- Logic trạng thái: Nếu còn bất kỳ dòng nào chưa TT -> Chưa TT
                 CASE 
-                    WHEN COUNT(b.idChamCong) = 0 THEN 'DaThanhToan' -- Không đi làm thì coi như xong
                     WHEN SUM(CASE WHEN l.ttThanhToan = 'ChuaThanhToan' THEN 1 ELSE 0 END) > 0 THEN 'ChuaThanhToan'
                     ELSE 'DaThanhToan'
                 END as trangThai
 
-            FROM nhanVien nv
+            FROM luong l
+            JOIN nhanVien nv ON l.idNhanVien = nv.idNhanVien
+            JOIN bangChamCong b ON l.idChamCong = b.idChamCong
             JOIN chucVu cv ON nv.idChucVu = cv.idChucVu
-
-            -- Join bảng chấm công theo tháng/năm
-            LEFT JOIN bangChamCong b ON nv.idNhanVien = b.idNhanVien 
-                 AND MONTH(b.gioVao) = %s AND YEAR(b.gioVao) = %s
-
-            -- Join bảng lương để lấy trạng thái thanh toán
-            LEFT JOIN luong l ON b.idChamCong = l.idChamCong
-
-            WHERE nv.trangThaiLamViec = 'DangLamViec'
-            GROUP BY nv.idNhanVien, cv.tenChucVu, cv.luongCoBan
-            ORDER BY nv.idNhanVien ASC
+            WHERE MONTH(b.gioVao) = %s AND YEAR(b.gioVao) = %s
+            GROUP BY l.idNhanVien, nv.hoTen, cv.tenChucVu
+            ORDER BY l.idNhanVien ASC
         """
         try:
-            if self.cursor:
-                self.cursor.execute(query, (month, year))
-                return self.cursor.fetchall()
-            return []
+            self.cursor.execute(query, (month, year))
+            return self.cursor.fetchall()
         except Exception as e:
-            print(f"Lỗi SQL Lương: {e}")
+            print(f"Lỗi lấy bảng lương: {e}")
             return []
         finally:
             self.close()
 
     def update_payment_status(self, idNV, month, year):
         """
-        Cập nhật tất cả các dòng lương trong tháng của NV đó thành 'DaThanhToan'
+        Cập nhật trạng thái thanh toán trong bảng LUONG
         """
         self.connect()
         query = """
@@ -85,13 +113,9 @@ class LuongModel:
               AND l.ttThanhToan = 'ChuaThanhToan'
         """
         try:
-            if self.cursor:
-                self.cursor.execute(query, (idNV, month, year))
-                self.conn.commit()
-                # Kiểm tra xem có dòng nào được update không
-                if self.cursor.rowcount > 0:
-                    return True
-                return False  # Không có dòng nào cần update (có thể đã thanh toán rồi)
+            self.cursor.execute(query, (idNV, month, year))
+            self.conn.commit()
+            return self.cursor.rowcount > 0
         except Exception as e:
             print(f"Lỗi thanh toán: {e}")
             return False
