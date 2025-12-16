@@ -6,7 +6,12 @@
 -- Thời gian đã tạo: Th12 09, 2025 lúc 05:30 PM
 -- Phiên bản máy phục vụ: 10.4.28-MariaDB
 -- Phiên bản PHP: 8.1.17
-
+-- 1. Xóa database coffeeShop nếu nó đã tồn tại
+DROP DATABASE IF EXISTS coffeeShop;
+-- 2. Tạo database mới (Cấu hình utf8mb4 để lưu được tiếng Việt không bị lỗi font)
+CREATE DATABASE coffeeShop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 3. Chọn database vừa tạo để làm việc
+USE coffeeShop;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
