@@ -151,8 +151,36 @@ class TestSanPhamIntegration(unittest.TestCase):
         self.assertEqual(res['isActive'], 1)
 
         # 2. Gọi Controller để Đổi trạng thái (1 -> 0)
-        # Controller sẽ mở kết nối riêng, update và commit.
-        self.controller.doi_trang_thai(id_sp)
+        success, msg = self.controller.doi_trang_thai(id_sp)
+        self.assertTrue(success, f"Đổi trạng thái thất bại: {msg}")
+
+        # [QUAN TRỌNG] Commit kết nối của Test để làm mới dữ liệu (Refresh Snapshot)
+        # Nếu thiếu dòng này, Test vẫn nhìn thấy dữ liệu cũ (isActive=1)
+        self.conn.commit()
+
+        # 3. Kiểm tra lại trong DB
+        self.cursor.execute("SELECT isActive FROM sanPham WHERE idSanPham = %s", (id_sp,))
+        new_status = self.cursor.fetchone()['isActive']
+
+        self.assertEqual(new_status, 0, "Trạng thái phải chuyển thành 0 (Ẩn) sau khi toggle")
+
+    def test_toggle_status_product(self):
+        """Test 3: Ẩn / Hiện sản phẩm"""
+        # 1. Thêm sản phẩm (Mặc định isActive = 1)
+        self.controller.them_san_pham(self.TEST_PROD_NAME, 30000, "", self.id_dm, self.id_nl)
+
+        # Lấy ID của sản phẩm vừa tạo
+        self.cursor.execute("SELECT idSanPham, isActive FROM sanPham WHERE tenSanPham = %s", (self.TEST_PROD_NAME,))
+        res = self.cursor.fetchone()
+        id_sp = res['idSanPham']
+
+        # Kiểm tra trạng thái ban đầu
+        self.assertEqual(res['isActive'], 1)
+
+        # 2. Gọi Controller để Đổi trạng thái (1 -> 0)
+        # Controller sẽ tự mở kết nối riêng, update và commit.
+        success, msg = self.controller.doi_trang_thai(id_sp)
+        self.assertTrue(success, f"Đổi trạng thái lỗi: {msg}")
 
         # [QUAN TRỌNG]: Commit kết nối của Test để làm mới dữ liệu (Refresh Snapshot)
         # Nếu thiếu dòng này, Test vẫn nhìn thấy dữ liệu cũ (isActive=1)
@@ -163,22 +191,6 @@ class TestSanPhamIntegration(unittest.TestCase):
         new_status = self.cursor.fetchone()['isActive']
 
         self.assertEqual(new_status, 0, "Trạng thái phải chuyển thành 0 (Ẩn)")
-
-    def test_toggle_status_product(self):
-        """Test 3: Ẩn / Hiện sản phẩm"""
-        # Thêm (Mặc định là Active 1)
-        self.controller.them_san_pham(self.TEST_PROD_NAME, 30000, "", self.id_dm, self.id_nl)
-
-        self.cursor.execute("SELECT idSanPham, isActive FROM sanPham WHERE tenSanPham = %s", (self.TEST_PROD_NAME,))
-        res = self.cursor.fetchone()
-        id_sp = res['idSanPham']
-        self.assertEqual(res['isActive'], 1)
-
-        # Đổi trạng thái -> Ẩn
-        self.controller.doi_trang_thai(id_sp)
-
-        self.cursor.execute("SELECT isActive FROM sanPham WHERE idSanPham = %s", (id_sp,))
-        self.assertEqual(self.cursor.fetchone()['isActive'], 0)
 
     def test_validate_input(self):
         """Test 4: Validate giá âm và tên rỗng"""

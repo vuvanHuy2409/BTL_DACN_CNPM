@@ -1,78 +1,55 @@
 import unittest
-import HtmlTestRunner
 import os
 import sys
-import time
+from HtmlTestRunner import HTMLTestRunner  # Import thư viện tạo báo cáo HTML
 
-# ==============================================================================
-# 1. CẤU HÌNH ĐƯỜNG DẪN (QUAN TRỌNG)
-# Giúp script nhìn thấy thư mục 'src' dù chạy ở bất kỳ môi trường nào
-# ==============================================================================
+# 1. Thêm thư mục gốc vào đường dẫn hệ thống
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-
-def main():
+def run_all_tests():
     print("=" * 60)
-    print("HỆ THỐNG KIỂM THỬ TỰ ĐỘNG - COFFEE SHOP MANAGER")
-    print(f"Đang khởi tạo tại: {project_root}")
+    print("🚀 ĐANG KHỞI ĐỘNG HỆ THỐNG KIỂM THỬ (HTML REPORT)")
     print("=" * 60)
 
-    # 2. XÁC ĐỊNH THƯ MỤC CHỨA TEST
-    # Đường dẫn: Project_Root/src/test/unitTest
-    test_dir = os.path.join(project_root, 'src', 'test', 'unitTest')
+    # 2. Định nghĩa đường dẫn
+    test_dir = os.path.join(project_root, "src", "test")
+    report_dir = os.path.join(project_root, "reports") # Thư mục chứa báo cáo
 
+    # Kiểm tra thư mục test
     if not os.path.exists(test_dir):
-        print(f"LỖI: Không tìm thấy thư mục test tại: {test_dir}")
-        print("Hãy kiểm tra lại cấu trúc thư mục!")
+        print(f"❌ Lỗi: Không tìm thấy thư mục test tại: {test_dir}")
         return
 
-    # 3. TỰ ĐỘNG TÌM KIẾM (TEST DISCOVERY)
-    # Tìm tất cả file có tên bắt đầu bằng "test" và đuôi ".py"
+    # 3. Tìm tất cả các test case
     loader = unittest.TestLoader()
-    print(f"--> Đang quét các file test trong: {test_dir} ...")
+    suite = loader.discover(start_dir=test_dir, pattern='test*.py', top_level_dir=project_root)
 
-    try:
-        suite = loader.discover(start_dir=test_dir, pattern='test*.py')
-    except Exception as e:
-        print(f"Lỗi khi quét file test: {e}")
-        return
+    count = suite.countTestCases()
+    print(f"🔍 Đã tìm thấy tổng cộng: {count} test cases")
+    print("-" * 60)
 
-    # Kiểm tra xem có tìm thấy test nào không
-    if suite.countTestCases() == 0:
-        print("CẢNH BÁO: Không tìm thấy Test Case nào!")
-        return
-    else:
-        print(f"--> Đã tìm thấy tổng cộng: {suite.countTestCases()} test cases.")
-
-    # 4. CẤU HÌNH THƯ MỤC XUẤT BÁO CÁO
-    report_folder = os.path.join(project_root, "test_reports")
-    if not os.path.exists(report_folder):
-        os.makedirs(report_folder)
-        print(f"--> Đã tạo thư mục báo cáo: {report_folder}")
-
-    # 5. CHẠY TEST VÀ XUẤT HTML
-    print("\nĐang thực thi kiểm thử... Vui lòng chờ giây lát...")
-
-    # Tạo tiêu đề báo cáo có ngày giờ
-    timestamp = time.strftime("%d-%m-%Y %H:%M:%S")
-
-    runner = HtmlTestRunner.HTMLTestRunner(
-        output=report_folder,
-        report_name="Bao_Cao_Kiem_Thu_Tong_Hop",
-        report_title=f"KẾT QUẢ KIỂM THỬ PHẦN MỀM QUẢN LÝ QUÁN CÀ PHÊ",
-        descriptions=f"Thời gian chạy: {timestamp}. Bao gồm các module: Đăng nhập, Nhân viên, Kho, Hóa đơn, Lương, Tài khoản...",
-        combine_reports=True,  # Gom tất cả vào 1 file duy nhất
-        add_timestamp=True,  # Thêm timestamp vào tên file
-        open_in_browser=True  # Tự động mở trình duyệt khi xong (chỉ hoạt động trên một số OS)
+    # 4. Cấu hình HTML Runner
+    # - output: Tên thư mục lưu file
+    # - report_name: Tên file báo cáo
+    # - combine_reports: Gộp tất cả test vào 1 file duy nhất (True)
+    # - add_timestamp: Thêm thời gian vào tên file để không bị ghi đè (True)
+    runner = HTMLTestRunner(
+        output=report_dir,
+        report_name="Bao_Cao_Kiem_Thu_BTL",
+        report_title="BÁO CÁO KẾT QUẢ KIỂM THỬ TỰ ĐỘNG",
+        combine_reports=True,
+        add_timestamp=True,
+        open_in_browser=True  # Tự động mở trình duyệt sau khi chạy xong
     )
 
+    # 5. Chạy test
     runner.run(suite)
+
     print("=" * 60)
-    print(f"HOÀN TẤT! Kiểm tra thư mục '{report_folder}' để xem báo cáo.")
+    print(f"✅ Đã xuất báo cáo HTML tại thư mục: {report_dir}")
     print("=" * 60)
 
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    run_all_tests()
